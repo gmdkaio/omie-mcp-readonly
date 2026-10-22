@@ -64,6 +64,8 @@ The user never sees these; Claude picks them from the question.
 | `contas_receber_vencidas` | Overdue receivables per client, amount still open |
 | `contas_pagar_proximos_dias` | Open payables due in the next N days, per supplier and per day |
 
+Every Omie service and method `consultar` and `resumir` can reach (201 methods across 134 services, from clients and invoices to stock, orders, CRM and service orders) is listed in [docs/catalogo-omie.md](docs/catalogo-omie.md), along with the reads the connector refuses today. `.\build\catalogo-omie.ps1` rebuilds that list from Omie's public docs.
+
 ## Building
 
 Needs the .NET 10 SDK and Node.js (only to run the official `mcpb` packer).
