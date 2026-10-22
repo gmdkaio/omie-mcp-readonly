@@ -9,9 +9,9 @@ As chaves do Omie não aceitam limite: cada empresa tem uma chave com acesso tot
 ## Recursos
 
 - Só leitura no código: qualquer método que não comece com `Listar`, `Pesquisar`, `Consultar` ou `Obter` é recusado, e a recusa fica no log.
-- Totais, contagens e rankings são calculados no código sobre todos os registros, e o Claude cita esses números.
+- Totais, contagens, médias e rankings são calculados no código sobre todos os registros, e o Claude cita esses números.
 - Cada resposta diz como o número saiu: empresa, período, o que foi contado e o que ficou de fora.
-- Receitas fixas para as perguntas de sempre (clientes novos, produtos mais vendidos, faturamento por cliente, contas a receber vencidas, contas a pagar dos próximos dias), cada uma comparada com as telas do próprio Omie antes de valer.
+- Receitas fixas para as perguntas de sempre (clientes novos, produtos mais vendidos, faturamento por cliente e por vendedor, contas a receber vencidas, contas a pagar dos próximos dias, despesas por categoria, pedidos em aberto), comparadas com as telas do próprio Omie antes de valer.
 - Um catálogo embutido de todos os serviços do Omie, com os parâmetros e campos de cada método, para as perguntas que as receitas não cobrem.
 - Mais de uma empresa na mesma instalação, com respostas por empresa ou somadas.
 - Consultas longas continuam rodando em segundo plano, e o Claude retoma de onde parou.

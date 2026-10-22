@@ -43,13 +43,16 @@ O usuário nunca vê estas ferramentas; o Claude escolhe pela pergunta.
 | Ferramenta | O que faz |
 |---|---|
 | `catalogo` | Acha qual serviço do Omie responde a uma pergunta, com os parâmetros exatos e os campos dos registros (embutido, sem chamada ao Omie) |
-| `consultar` | Qualquer método de leitura do Omie, devolve até 200 registros com o total real |
-| `resumir` | A mesma consulta, com contagem, soma, agrupamento por um campo e top N calculados sobre todos os registros |
+| `consultar` | Qualquer método de leitura do Omie, devolve até 200 registros com o total real e os campos de fora da lista (os saldos de um extrato, por exemplo) |
+| `resumir` | A mesma consulta, com contagem, soma, média, agrupamento por um campo e top N calculados sobre todos os registros; `crescente` lista do menor para o maior (saídas do extrato são negativas) |
 | `clientes_novos` | Cadastros incluídos num período com a tag Cliente, por mês, e todos os cadastros por tag |
 | `produtos_mais_vendidos` | Itens das notas de pedidos de venda, quantidade e receita por produto |
-| `faturamento_por_cliente` | Total das notas por cliente, com a mesma regra do relatório de faturamento do Omie |
+| `faturamento_por_cliente` | Total das notas por cliente, com a mesma regra do relatório de faturamento do Omie, as devoluções do período à parte e a divisão por empresa |
+| `faturamento_por_vendedor` | As mesmas notas por vendedor do pedido, juntando o mesmo vendedor das duas empresas pelo nome |
 | `contas_receber_vencidas` | Contas a receber vencidas por cliente, valor ainda em aberto, com as contas pagas em parte |
 | `contas_pagar_proximos_dias` | Contas a pagar em aberto que vencem nos próximos N dias, por fornecedor e por dia |
+| `despesas_por_categoria` | Saídas do extrato de cada conta num período (regime de caixa), por categoria e por conta, sem as transferências entre contas da empresa |
+| `pedidos_em_aberto` | Pedidos de venda nas etapas antes de Faturado e Entrega, por etapa, separando orçamentos de pedidos firmes |
 
 ## Detalhes técnicos
 
