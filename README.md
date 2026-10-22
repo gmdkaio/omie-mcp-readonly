@@ -4,7 +4,7 @@ Pergunte ao Claude sobre o Omie da sua empresa em português comum e receba resp
 
 ## Por que só leitura
 
-As chaves do Omie não aceitam limite: cada empresa tem uma chave com acesso total a todos os módulos, então quem guarda a chave decide o que pode acontecer com o ERP, e pedir a uma IA que não escreva não garante nada. Este conector recusa no PC toda chamada que não seja de leitura, antes de ela chegar ao Omie. Os servidores MCP do Omie feitos pela comunidade e encontrados em 22/10/2026 escrevem todos, vários excluem registros ou pagam contas, um guarda as chaves num servidor de terceiros e nenhum atende mais de uma empresa.
+As chaves do Omie não aceitam limite: cada empresa tem uma chave com acesso total a todos os módulos, então quem guarda a chave decide o que pode acontecer com o ERP, e pedir a uma IA que não escreva não garante nada. Este conector recusa no PC toda chamada que não seja de leitura, antes de ela chegar ao Omie. A trava não protege a chave em si: quem tirar a chave de um bundle ou das configurações da extensão pode usá-la fora do conector, com acesso total. Os servidores MCP do Omie feitos pela comunidade e encontrados em 22/10/2026 escrevem todos, vários excluem registros ou pagam contas, um guarda as chaves num servidor de terceiros e nenhum atende mais de uma empresa.
 
 ## Recursos
 
