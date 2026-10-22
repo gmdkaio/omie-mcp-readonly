@@ -2,7 +2,7 @@
 
 Every service in the Omie API (134 services, 466 methods), taken from Omie's public docs on 22/10/2026 by `build/catalogo-omie.ps1`. The connector calls 201 of those methods: the ones whose names start with `Listar`, `Pesquisar`, `Consultar` or `Obter`. Everything else is refused before it leaves the PC.
 
-Claude reaches any method in the third column through `consultar` and `resumir`, passing the endpoint and the method; the recipes use `geral/clientes`, `produtos/nfconsultar` and `financas/mf`. A method being listed means the connector accepts the call. It doesn't mean the data exists in every Omie account: a company that doesn't use CRM or service orders gets empty answers there. Omie documents each method's parameters at `https://app.omie.com.br/api/v1/<endpoint>/`.
+Claude reaches any method in the third column through `consultar` and `resumir`, passing the endpoint and the method; the recipes use `geral/clientes`, `produtos/nfconsultar` and `financas/mf`. The same list is built into the connector as the `catalogo` tool, with each method's parameters and the fields of the records it returns, so Claude looks the service up instead of guessing. A method being listed means the connector accepts the call. It doesn't mean the data exists in every Omie account: a company that doesn't use CRM or service orders gets empty answers there. Omie documents each method's parameters at `https://app.omie.com.br/api/v1/<endpoint>/`.
 
 > **Regra:** a name in this file is not a definition. Before a number from a service becomes a recipe, it has to match the Omie screen (see [receitas.md](receitas.md)).
 

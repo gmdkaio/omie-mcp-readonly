@@ -14,7 +14,7 @@ What it does not protect against: the keys still exist. Anyone who gets a bundle
 
 ## Status
 
-Version 0.1, not released. The read-only guard, paging, Omie's retry rules, the summaries and the local log are built and tested (67 tests against a fake Omie). Every tool has also run against a real Omie account with two companies. The five recipes below still need to match the matching Omie screen before they count as done ([docs/receitas.md](docs/receitas.md)); until then Claude says so in its answers.
+Version 0.1, not released. The read-only guard, paging, Omie's retry rules, the summaries and the local log are built and tested (80 tests against a fake Omie). Every tool has also run against a real Omie account with two companies. The five recipes below still need to match the matching Omie screen before they count as done ([docs/receitas.md](docs/receitas.md)); until then Claude says so in its answers.
 
 ## How it is used
 
@@ -56,6 +56,7 @@ The user never sees these; Claude picks them from the question.
 
 | Tool | What it does |
 |---|---|
+| `catalogo` | Finds which Omie service answers a question, with its exact parameters and record fields (built in, no call to Omie) |
 | `consultar` | Any read-only Omie method, up to 200 records back with the real total (it stops paging at 200; totals go through `resumir`) |
 | `resumir` | Same query, with count, sum, group by one field and top N computed over every record |
 | `clientes_novos` | Cadastros included in a period, by month and by tag |
@@ -64,7 +65,7 @@ The user never sees these; Claude picks them from the question.
 | `contas_receber_vencidas` | Overdue receivables per client, amount still open |
 | `contas_pagar_proximos_dias` | Open payables due in the next N days, per supplier and per day |
 
-Every Omie service and method `consultar` and `resumir` can reach (201 methods across 134 services, from clients and invoices to stock, orders, CRM and service orders) is listed in [docs/catalogo-omie.md](docs/catalogo-omie.md), along with the reads the connector refuses today. `.\build\catalogo-omie.ps1` rebuilds that list from Omie's public docs.
+Every Omie service and method `consultar` and `resumir` can reach (201 methods across 134 services, from clients and invoices to stock, orders, CRM and service orders) is listed in [docs/catalogo-omie.md](docs/catalogo-omie.md), along with the reads the connector refuses today. `.\build\catalogo-omie.ps1` rebuilds that list, and the copy built into the exe (`src/OmieMcpReadonly/catalogo-omie.json`), from Omie's public docs. The connector also takes each method's paging fields from it: Omie spells them five different ways, and some list methods don't page at all.
 
 ## Building
 

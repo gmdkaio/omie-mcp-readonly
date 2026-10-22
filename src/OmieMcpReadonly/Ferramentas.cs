@@ -12,6 +12,29 @@ public sealed class Ferramentas
         "Omie company name as configured (see the server instructions), or \"ambas\" for all of them combined. " +
         "If the user's question doesn't say which company, ask before calling.";
 
+    [McpServerTool(Name = "catalogo", Title = "Catálogo do Omie", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("""
+        Finds which Omie service and method answer a question, and what to send. Works offline (built from Omie's
+        public docs), so it costs nothing to call.
+        - busca: a few Portuguese words from the question ("estoque produto", "pedidos de venda", "contas a receber
+          vencidas"). Returns the best matching services with their read methods.
+        - endpoint (and optionally metodo): the exact parameter names to filter by, Omie's example call, and every
+          field of the returned records as dotted paths ready for resumir (det[].prod.vProd).
+        - nothing: one line per service, all of them.
+        Call it before consultar or resumir whenever no recipe fits and you are not sure of the endpoint, the method
+        or a parameter name. Never guess parameter names: Omie rejects unknown ones, and repeated errors block the
+        company's key for 30 minutes.
+        """)]
+    public static Task<string> ConsultarCatalogo(
+        Catalogo catalogo,
+        [Description("Words from the question, in Portuguese.")] string? busca = null,
+        [Description("Endpoint to detail, e.g. produtos/pedido.")] string? endpoint = null,
+        [Description("Optional: one method of that endpoint to detail, e.g. ListarPedidos.")] string? metodo = null) =>
+        Executar(() => Task.FromResult(
+            !string.IsNullOrWhiteSpace(endpoint) ? catalogo.Detalhar(endpoint, metodo)
+            : !string.IsNullOrWhiteSpace(busca) ? catalogo.Buscar(busca)
+            : catalogo.Indice()));
+
     [McpServerTool(Name = "consultar", Title = "Consultar o Omie", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("""
         Runs any read-only Omie API method and returns up to 200 rows plus the real total. Only methods starting with
@@ -20,7 +43,7 @@ public sealed class Ferramentas
         resumir. Never add up or count the returned rows yourself: when the total is above the rows returned, or the
         question asks for a total, count, ranking or grouping, use resumir with the same parameters.
         Pages are fetched automatically (do not send page fields unless the method uses unusual names for them).
-        Dates are text dd/mm/aaaa. Omie docs for each endpoint: https://app.omie.com.br/api/v1/<endpoint>/
+        Dates are text dd/mm/aaaa. Take the endpoint, method and parameter names from the catalogo tool.
         """)]
     public static Task<string> Consultar(
         Servico servico,
@@ -81,7 +104,8 @@ public sealed class Ferramentas
         are exact, so quote them instead of recomputing.
         Steps, in order: expandir (unnest an array, e.g. "det" to get one row per invoice item, parent fields kept),
         filtros (all must match), then somar and agrupar_por. Field paths are dotted, e.g. ide.dEmi, det.prod.vProd,
-        detalhes.nCodCliente, resumo.nValAberto. Look at one record with consultar first if unsure of the names.
+        detalhes.nCodCliente, resumo.nValAberto. The catalogo tool lists every field path of a method's records; a
+        path with [] there (det[].prod.vProd) means expandir "det" and then the path without [] (det.prod.vProd).
         Filter operators: = != > >= < <= contem nao_contem em nao_em (valor is a list) vazio preenchido. Dates
         dd/mm/aaaa compare as dates, numbers as numbers.
         When several companies are asked, each row also has _empresa (you can group by it).

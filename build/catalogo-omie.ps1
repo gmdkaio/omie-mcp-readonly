@@ -1,7 +1,13 @@
-# Rebuilds docs/catalogo-omie.md: every Omie API service, from Omie's public docs (no keys needed), with the methods
-# the connector can call and the ones it refuses. Run it when Omie adds services.
+# Rebuilds the catalog of every Omie API service, from Omie's public docs (no keys needed). Run it when Omie adds
+# services, then rebuild the exe.
+#   docs/catalogo-omie.md                     for people: services, the methods the connector can call, the ones it refuses
+#   src/OmieMcpReadonly/catalogo-omie.json    built into the server for the catalogo tool: each read method with its
+#                                             description, example call and the fields of its request and response types
 #   .\build\catalogo-omie.ps1
-param([string]$Saida = (Join-Path $PSScriptRoot "..\docs\catalogo-omie.md"))
+param(
+    [string]$Saida = (Join-Path $PSScriptRoot "..\docs\catalogo-omie.md"),
+    [string]$Json = (Join-Path $PSScriptRoot "..\src\OmieMcpReadonly\catalogo-omie.json")
+)
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Web
 function Texto($html) { ([Web.HttpUtility]::HtmlDecode(($html -replace '<[^>]+>', ' ')) -replace '\s+', ' ').Trim() }
@@ -19,14 +25,47 @@ foreach ($t in $tokens) {
     if ($t.Groups["grupo"].Success) { $grupo = Texto $t.Groups["grupo"].Value; continue }
     $ep = $t.Groups["ep"].Value
     if ($servicos.Contains($ep)) { continue }
-    $servicos[$ep] = [pscustomobject]@{ Endpoint = $ep; Grupo = $grupo; Titulo = Texto $t.Groups["titulo"].Value; Metodos = @() }
+    $servicos[$ep] = [pscustomobject]@{ Endpoint = $ep; Grupo = $grupo; Titulo = Texto $t.Groups["titulo"].Value
+                                        Descricao = Texto $t.Groups["desc"].Value; Metodos = @(); Tipos = @{} }
 }
 
+# a page is a run of method blocks, then a run of type blocks; each block ends where the next one starts
+$fimDeBloco = '(?=<div id="\w+" class="methodItem">|<div class="complexTypeItem">|\z)'
 foreach ($s in $servicos.Values) {
     $html = (Invoke-WebRequest -UseBasicParsing "https://app.omie.com.br/api/v1/$($s.Endpoint)/").Content
-    $s.Metodos = @([regex]::Matches($html, '(?s)<div id="(?<m>\w+)" class="methodItem">\s*<h3 class="method-name">\w+</h3>\s*(?:<p>\s*(?<d>.*?)\s*</p>)?') |
-        ForEach-Object { [pscustomobject]@{ Nome = $_.Groups["m"].Value; Descricao = Texto $_.Groups["d"].Value } })
-    Write-Host ("{0,-40} {1}" -f $s.Endpoint, $s.Metodos.Count)
+    $s.Metodos = @([regex]::Matches($html, "(?s)<div id=""(?<m>\w+)"" class=""methodItem"">\s*<h3 class=""method-name"">\w+</h3>\s*(?:<p>\s*(?<d>.*?)\s*</p>)?(?<corpo>.*?)$fimDeBloco") |
+        ForEach-Object {
+            $corpo = $_.Groups["corpo"].Value
+            $exemplo = [regex]::Match($corpo, '(?s)<pre class="method-example-code">(.*?)</pre>').Groups[1].Value
+            [pscustomobject]@{
+                Nome = $_.Groups["m"].Value
+                Descricao = Texto $_.Groups["d"].Value
+                Requisicao = [regex]::Match($corpo, 'method-parameter-type"><a href="#(\w+)"').Groups[1].Value
+                Resposta = [regex]::Match($corpo, 'Retorno <span class="pre"><a href="#(\w+)"').Groups[1].Value
+                Exemplo = ([Web.HttpUtility]::HtmlDecode(($exemplo -replace '(?i)<br\s*/?>', ' ' -replace '<[^>]+>', '')) -replace '\s+', ' ').Trim()
+            } })
+    foreach ($t in [regex]::Matches($html, "(?s)<div class=""complexTypeItem"">\s*<a name=""(?<n>\w+)""[^>]*></a>\s*<h3>[^<]*</h3>\s*(?:<p>(?<d>.*?)</p>)?(?<corpo>.*?)$fimDeBloco")) {
+        $corpo = $t.Groups["corpo"].Value
+        # one row per field; the docs cell is missing on many rows, so no cell may run past its own </td>
+        $campos = @([regex]::Matches($corpo, '(?s)<td class="parameter-name (?<c>[^"]*)">(?<n>[^<]*)</td>\s*<td class="parameter-type">(?<t>(?:(?!</td>).)*)</td>(?:<td class="parameter-docs">(?<d>(?:(?!</td>).)*)</td>)?') |
+            ForEach-Object {
+                $campo = [ordered]@{
+                    nome = $_.Groups["n"].Value.Trim()
+                    tipo = Texto ($_.Groups["t"].Value -replace '<span class="parameter-lenght">(\d+)</span>', '($1)')
+                    descricao = Texto $_.Groups["d"].Value
+                    obrigatorio = $_.Groups["c"].Value -notmatch 'optional' }
+                $ref = [regex]::Match($_.Groups["t"].Value, 'href="#(\w+)"')
+                if ($ref.Success) { $campo.ref = $ref.Groups[1].Value }
+                $campo })
+        $elemento = [regex]::Match($t.Groups["d"].Value + $corpo, '(?s)array do tipo.*?href="#(\w+)"')
+        $s.Tipos[$t.Groups["n"].Value] = [pscustomobject]@{
+            Descricao = Texto ($t.Groups["d"].Value + " " + ([regex]::Matches($corpo, '(?s)<p>(.*?)</p>') | ForEach-Object { $_.Groups[1].Value }) -join " ")
+            Campos = $campos
+            Elemento = if ($elemento.Success) { $elemento.Groups[1].Value } else { $null }
+            Refs = @(@($campos | Where-Object { $_.ref } | ForEach-Object { $_.ref }) + @($elemento.Groups[1].Value | Where-Object { $_ }) | Select-Object -Unique)
+        }
+    }
+    Write-Host ("{0,-40} {1} métodos, {2} tipos" -f $s.Endpoint, $s.Metodos.Count, $s.Tipos.Count)
     Start-Sleep -Milliseconds 250
 }
 
@@ -40,7 +79,7 @@ $md = New-Object Text.StringBuilder
 [void]$md.AppendLine()
 [void]$md.AppendLine("Every service in the Omie API ($($todos.Count) services, $($metodos.Count) methods), taken from Omie's public docs on $(Get-Date -Format 'dd/MM/yyyy') by ``build/catalogo-omie.ps1``. The connector calls $($aceitos.Count) of those methods: the ones whose names start with ``Listar``, ``Pesquisar``, ``Consultar`` or ``Obter``. Everything else is refused before it leaves the PC.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("Claude reaches any method in the third column through ``consultar`` and ``resumir``, passing the endpoint and the method; the recipes use ``geral/clientes``, ``produtos/nfconsultar`` and ``financas/mf``. A method being listed means the connector accepts the call. It doesn't mean the data exists in every Omie account: a company that doesn't use CRM or service orders gets empty answers there. Omie documents each method's parameters at ``https://app.omie.com.br/api/v1/<endpoint>/``.")
+[void]$md.AppendLine("Claude reaches any method in the third column through ``consultar`` and ``resumir``, passing the endpoint and the method; the recipes use ``geral/clientes``, ``produtos/nfconsultar`` and ``financas/mf``. The same list is built into the connector as the ``catalogo`` tool, with each method's parameters and the fields of the records it returns, so Claude looks the service up instead of guessing. A method being listed means the connector accepts the call. It doesn't mean the data exists in every Omie account: a company that doesn't use CRM or service orders gets empty answers there. Omie documents each method's parameters at ``https://app.omie.com.br/api/v1/<endpoint>/``.")
 [void]$md.AppendLine()
 [void]$md.AppendLine("> **Regra:** a name in this file is not a definition. Before a number from a service becomes a recipe, it has to match the Omie screen (see [receitas.md](receitas.md)).")
 
@@ -69,4 +108,33 @@ $fora = @($todos | ForEach-Object { $s = $_; $s.Metodos | Where-Object { $_.Nome
 $fora | ForEach-Object { [void]$md.AppendLine($_) }
 
 [IO.File]::WriteAllText((Join-Path (Resolve-Path (Split-Path $Saida)) (Split-Path $Saida -Leaf)), $md.ToString(), (New-Object Text.UTF8Encoding $false))
+
+# the JSON keeps only what a read needs: accepted methods, and the types reachable from their requests and responses
+$catalogo = foreach ($s in $todos) {
+    $le = @($s.Metodos | Where-Object { $_.Nome -cmatch $leitura })
+    $fila = New-Object Collections.Generic.Queue[string]
+    $le | ForEach-Object { $_.Requisicao; $_.Resposta } | Where-Object { $_ } | ForEach-Object { $fila.Enqueue($_) }
+    $tipos = [ordered]@{}
+    while ($fila.Count) {
+        $n = $fila.Dequeue()
+        if ($tipos.Contains($n)) { continue }
+        if (-not $s.Tipos.ContainsKey($n)) {
+            # "nfCadastroArray" is often not defined on the page: it is a list of nfCadastro
+            if ($n -cmatch '^(?<e>\w+)Array$' -and $s.Tipos.ContainsKey($matches.e)) { $tipos[$n] = [ordered]@{ descricao = "Lista de $($matches.e)"; elemento = $matches.e; campos = @() }; $fila.Enqueue($matches.e) }
+            continue
+        }
+        $t = $s.Tipos[$n]
+        $tipos[$n] = [ordered]@{ descricao = $t.Descricao; campos = @($t.Campos) }
+        if ($t.Elemento) { $tipos[$n].elemento = $t.Elemento }
+        $t.Refs | ForEach-Object { $fila.Enqueue($_) }
+    }
+    [ordered]@{
+        endpoint = $s.Endpoint; grupo = $s.Grupo; titulo = $s.Titulo; descricao = $s.Descricao
+        metodos = @($le | ForEach-Object { [ordered]@{ nome = $_.Nome; descricao = $_.Descricao; requisicao = $_.Requisicao; resposta = $_.Resposta; exemplo = $_.Exemplo } })
+        recusados = @($s.Metodos | Where-Object { $_.Nome -cnotmatch $leitura } | ForEach-Object { $_.Nome })
+        tipos = $tipos
+    }
+}
+$doc = [ordered]@{ gerado_em = (Get-Date -Format "dd/MM/yyyy"); fonte = "https://developer.omie.com.br/service-list/"; servicos = @($catalogo) }
+[IO.File]::WriteAllText((Join-Path (Resolve-Path (Split-Path $Json)) (Split-Path $Json -Leaf)), ($doc | ConvertTo-Json -Depth 12 -Compress), (New-Object Text.UTF8Encoding $false))
 Write-Host "Pronto: $Saida ($($todos.Count) serviços, $($aceitos.Count) métodos aceitos, $($fora.Count) leituras fora da regra)"

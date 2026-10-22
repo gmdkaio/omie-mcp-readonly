@@ -16,8 +16,10 @@ public static class Instrucoes
         - If the question doesn't say which company and more than one is configured, ask first (one of them, or both).
           "ambas" combines all companies in one answer and also gives the split per company.
         - Prefer a recipe tool when one fits (clientes_novos, produtos_mais_vendidos, faturamento_por_cliente,
-          contas_receber_vencidas, contas_pagar_proximos_dias). Otherwise use resumir for any total, count or
-          ranking, and consultar only to look at a few records or to find field names.
+          contas_receber_vencidas, contas_pagar_proximos_dias). Otherwise find the service with catalogo: first a
+          search with a few words of the question, then catalogo with the chosen endpoint for the exact parameters
+          and record fields. Then use resumir for any total, count or ranking, and consultar only to look at a few
+          records. The catalog covers every Omie service (stock, orders, purchases, CRM, service orders...).
         - Never add up, count or rank rows yourself. Quote the numbers the tools computed. If something can't be
           computed with the tools, say so instead of estimating.
         - Always tell the user how the number was obtained, in one or two plain sentences: company, period, what was
