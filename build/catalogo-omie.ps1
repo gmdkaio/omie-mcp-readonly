@@ -1,4 +1,4 @@
-# Rebuilds the catalog of every Omie API service, from Omie's public docs (no keys needed). Run it when Omie adds
+﻿# Rebuilds the catalog of every Omie API service, from Omie's public docs (no keys needed). Run it when Omie adds
 # services, then rebuild the exe.
 #   docs/catalogo-omie.md                     for people: services, the methods the connector can call, the ones it refuses
 #   src/OmieMcpReadonly/catalogo-omie.json    built into the server for the catalogo tool: each read method with its
@@ -75,23 +75,23 @@ $aceitos = @($metodos | Where-Object { $_.Nome -cmatch $leitura })
 $celula = { param($m) $d = $m.Descricao -replace '\|', '/'; if ($d) { "``$($m.Nome)``: $d" } else { "``$($m.Nome)``" } }
 
 $md = New-Object Text.StringBuilder
-[void]$md.AppendLine("# What the connector can read in Omie")
+[void]$md.AppendLine("# O que o conector consegue ler no Omie")
 [void]$md.AppendLine()
-[void]$md.AppendLine("Every service in the Omie API ($($todos.Count) services, $($metodos.Count) methods), taken from Omie's public docs on $(Get-Date -Format 'dd/MM/yyyy') by ``build/catalogo-omie.ps1``. The connector calls $($aceitos.Count) of those methods: the ones whose names start with ``Listar``, ``Pesquisar``, ``Consultar`` or ``Obter``. Everything else is refused before it leaves the PC.")
+[void]$md.AppendLine("Todos os serviços da API do Omie ($($todos.Count) serviços, $($metodos.Count) métodos), tirados da documentação pública do Omie em $(Get-Date -Format 'dd/MM/yyyy') pelo ``build/catalogo-omie.ps1``. O conector chama $($aceitos.Count) desses métodos: os que começam com ``Listar``, ``Pesquisar``, ``Consultar`` ou ``Obter``. Todo o resto é recusado antes de sair do PC.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("Claude reaches any method in the third column through ``consultar`` and ``resumir``, passing the endpoint and the method; the recipes use ``geral/clientes``, ``produtos/nfconsultar`` and ``financas/mf``. The same list is built into the connector as the ``catalogo`` tool, with each method's parameters and the fields of the records it returns, so Claude looks the service up instead of guessing. A method being listed means the connector accepts the call. It doesn't mean the data exists in every Omie account: a company that doesn't use CRM or service orders gets empty answers there. Omie documents each method's parameters at ``https://app.omie.com.br/api/v1/<endpoint>/``.")
+[void]$md.AppendLine("O Claude chega a qualquer método da terceira coluna pelo ``consultar`` e pelo ``resumir``, passando o endpoint e o método; as receitas usam ``geral/clientes``, ``produtos/nfconsultar`` e ``financas/mf``. A mesma lista vem embutida no conector como a ferramenta ``catalogo``, com os parâmetros de cada método e os campos dos registros que ele devolve, para o Claude consultar o serviço em vez de adivinhar. Estar na lista quer dizer que o conector aceita a chamada. Não quer dizer que o dado existe em toda conta do Omie: uma empresa que não usa CRM ou ordens de serviço recebe respostas vazias ali. O Omie documenta os parâmetros de cada método em ``https://app.omie.com.br/api/v1/<endpoint>/``.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("> **Regra:** a name in this file is not a definition. Before a number from a service becomes a recipe, it has to match the Omie screen (see [receitas.md](receitas.md)).")
+[void]$md.AppendLine("> **Regra:** um nome neste arquivo não é uma definição. Antes de um número de um serviço virar receita, ele tem que bater com a tela do Omie (ver [receitas.md](receitas.md)).")
 
 foreach ($g in ($todos | Group-Object Grupo)) {
     [void]$md.AppendLine()
     [void]$md.AppendLine("## $($g.Name)")
     [void]$md.AppendLine()
-    [void]$md.AppendLine("| Endpoint | Service | Methods the connector can call |")
+    [void]$md.AppendLine("| Endpoint | Serviço | Métodos que o conector pode chamar |")
     [void]$md.AppendLine("|---|---|---|")
     foreach ($s in $g.Group) {
         $le = @($s.Metodos | Where-Object { $_.Nome -cmatch $leitura } | ForEach-Object { & $celula $_ })
-        $cel = if ($le.Count) { $le -join "<br>" } else { "none (this service only writes)" }
+        $cel = if ($le.Count) { $le -join "<br>" } else { "nenhum (este serviço só grava)" }
         [void]$md.AppendLine("| ``$($s.Endpoint)`` | $($s.Titulo -replace '\|', '/') | $cel |")
     }
 }
@@ -99,11 +99,11 @@ foreach ($g in ($todos | Group-Object Grupo)) {
 $fora = @($todos | ForEach-Object { $s = $_; $s.Metodos | Where-Object { $_.Nome -cnotmatch $leitura -and $_.Nome -cmatch $leituraForaDaRegra } |
     ForEach-Object { "| ``$($s.Endpoint)`` | $(& $celula $_) |" } })
 [void]$md.AppendLine()
-[void]$md.AppendLine("## Reads the connector refuses today")
+[void]$md.AppendLine("## Leituras que o conector recusa hoje")
 [void]$md.AppendLine()
-[void]$md.AppendLine("These methods look like reads by name or description but don't follow the prefix rule, so the connector refuses them. Most have an accepted counterpart in the same service (stock position through ``ListarPosEstoque``, stock movements through ``ListarMovimentoEstoque``, an order's status through ``ConsultarPedido``). The fiscal coupon listings in ``produtos/cupomfiscalconsultar`` have none. Any of these would have to be added to the allowlist by exact name, after reading its Omie doc page, before Claude can use it.")
+[void]$md.AppendLine("Estes métodos parecem leitura pelo nome ou pela descrição, mas não seguem a regra do prefixo, então o conector recusa. A maioria tem um equivalente aceito no mesmo serviço (posição de estoque pelo ``ListarPosEstoque``, movimentos de estoque pelo ``ListarMovimentoEstoque``, situação de um pedido pelo ``ConsultarPedido``). As listagens de cupom fiscal em ``produtos/cupomfiscalconsultar`` não têm. Para o Claude poder usar qualquer um deles, ele teria que entrar na lista de permitidos pelo nome exato, depois de ler a página dele na documentação do Omie.")
 [void]$md.AppendLine()
-[void]$md.AppendLine("| Endpoint | Method |")
+[void]$md.AppendLine("| Endpoint | Método |")
 [void]$md.AppendLine("|---|---|")
 $fora | ForEach-Object { [void]$md.AppendLine($_) }
 

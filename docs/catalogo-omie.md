@@ -1,14 +1,14 @@
-# What the connector can read in Omie
+# O que o conector consegue ler no Omie
 
-Every service in the Omie API (134 services, 466 methods), taken from Omie's public docs on 22/10/2026 by `build/catalogo-omie.ps1`. The connector calls 201 of those methods: the ones whose names start with `Listar`, `Pesquisar`, `Consultar` or `Obter`. Everything else is refused before it leaves the PC.
+Todos os serviços da API do Omie (134 serviços, 466 métodos), tirados da documentação pública do Omie em 22/10/2026 pelo `build/catalogo-omie.ps1`. O conector chama 201 desses métodos: os que começam com `Listar`, `Pesquisar`, `Consultar` ou `Obter`. Todo o resto é recusado antes de sair do PC.
 
-Claude reaches any method in the third column through `consultar` and `resumir`, passing the endpoint and the method; the recipes use `geral/clientes`, `produtos/nfconsultar` and `financas/mf`. The same list is built into the connector as the `catalogo` tool, with each method's parameters and the fields of the records it returns, so Claude looks the service up instead of guessing. A method being listed means the connector accepts the call. It doesn't mean the data exists in every Omie account: a company that doesn't use CRM or service orders gets empty answers there. Omie documents each method's parameters at `https://app.omie.com.br/api/v1/<endpoint>/`.
+O Claude chega a qualquer método da terceira coluna pelo `consultar` e pelo `resumir`, passando o endpoint e o método; as receitas usam `geral/clientes`, `produtos/nfconsultar` e `financas/mf`. A mesma lista vem embutida no conector como a ferramenta `catalogo`, com os parâmetros de cada método e os campos dos registros que ele devolve, para o Claude consultar o serviço em vez de adivinhar. Estar na lista quer dizer que o conector aceita a chamada. Não quer dizer que o dado existe em toda conta do Omie: uma empresa que não usa CRM ou ordens de serviço recebe respostas vazias ali. O Omie documenta os parâmetros de cada método em `https://app.omie.com.br/api/v1/<endpoint>/`.
 
-> **Regra:** a name in this file is not a definition. Before a number from a service becomes a recipe, it has to match the Omie screen (see [receitas.md](receitas.md)).
+> **Regra:** um nome neste arquivo não é uma definição. Antes de um número de um serviço virar receita, ele tem que bater com a tela do Omie (ver [receitas.md](receitas.md)).
 
 ## Geral
 
-| Endpoint | Service | Methods the connector can call |
+| Endpoint | Serviço | Métodos que o conector pode chamar |
 |---|---|---|
 | `geral/clientes` | Clientes, Fornecedores, Transportadoras, etc | `ConsultarCliente`: Consulta os dados de um cliente<br>`ListarClientes`: Lista os clientes cadastrados<br>`ListarClientesResumido`: Realiza pesquisa dos clientes |
 | `geral/clientescaract` | Clientes - Características | `ConsultarCaractCliente` |
@@ -32,7 +32,7 @@ Claude reaches any method in the third column through `consultar` and `resumir`,
 
 ## CRM
 
-| Endpoint | Service | Methods the connector can call |
+| Endpoint | Serviço | Métodos que o conector pode chamar |
 |---|---|---|
 | `crm/contas` | Contas | `ConsultarConta`: Consulta uma conta do CRM.<br>`ListarContas`: Lista as contas do CRM. |
 | `crm/contascaract` | Contas - Características | `ConsultarCaractConta` |
@@ -54,7 +54,7 @@ Claude reaches any method in the third column through `consultar` and `resumir`,
 
 ## Finanças
 
-| Endpoint | Service | Methods the connector can call |
+| Endpoint | Serviço | Métodos que o conector pode chamar |
 |---|---|---|
 | `geral/contacorrente` | Contas Correntes | `ConsultarContaCorrente`: Realiza a consulta de uma conta corrente<br>`ListarContasCorrentes`: Listar Contas Correntes<br>`ListarResumoContasCorrentes`: Listar resumida de Contas correntes.<br>`PesquisarContaCorrente`: DEPRECATED |
 | `financas/contacorrentelancamentos` | Contas Correntes - Lançamentos | `ListarLancCC` |
@@ -77,19 +77,19 @@ Claude reaches any method in the third column through `consultar` and `resumir`,
 
 ## Compras, Estoque e Produção
 
-| Endpoint | Service | Methods the connector can call |
+| Endpoint | Serviço | Métodos que o conector pode chamar |
 |---|---|---|
 | `geral/produtos` | Produtos | `ConsultarProduto`: Consulta um produto.<br>`ListarProdutos`: Lista completa do Cadastro de Produtos<br>`ListarProdutosResumido`: Lista os produtos cadastrados |
 | `geral/prodcaract` | Produtos - Características | `ConsultarCaractProduto`<br>`ListarCaractProduto` |
 | `geral/malha` | Produtos - Estrutura | `ConsultarEstrutura`: Consulta a estrutura do produto.<br>`ListarEstruturas`: Lista as estruturas de produtos. |
-| `geral/produtoskit` | Produtos - Kit | none (this service only writes) |
+| `geral/produtoskit` | Produtos - Kit | nenhum (este serviço só grava) |
 | `produtos/variacao` | Produtos - Variação | `ConsultarVariacoes`<br>`ListarVariacoes` |
 | `produtos/produtoslote` | Produtos - Lote | `ConsultarLote`<br>`ListarLotes` |
 | `produtos/requisicaocompra` | Requisições de Compra | `ConsultarReq`<br>`PesquisarReq` |
 | `produtos/pedidocompra` | Pedidos de Compra | `ConsultarPedCompra`<br>`ListarMotivosEncerramento`<br>`PesquisarPedCompra` |
 | `produtos/op` | Ordens de Produção | `ConsultarOrdemProducao`<br>`ListarOrdemProducao` |
 | `produtos/notaentrada` | Nota de Entrada | `ConsultarNotaEnt`: Consultar nota de entrada.<br>`ListarNotaEnt`: Listagem de nota de entrada. |
-| `produtos/notaentradafat` | Nota de Entrada - Faturamento | none (this service only writes) |
+| `produtos/notaentradafat` | Nota de Entrada - Faturamento | nenhum (este serviço só grava) |
 | `produtos/recebimentonfe` | Recebimento de Nota Fiscal | `ConsultarRecebimento`: Consultar recebimento de NFe.<br>`ListarRecebimentos`: Listar recebimento de NFe. |
 | `geral/familias` | Familias de Produto | `ConsultarFamilia`: Consulta uma familia de produto.<br>`PesquisarFamilias`: Listagem de familias cadastradas. |
 | `geral/unidade` | Unidades | `ListarUnidades`: Lista as unidades de medidas. |
@@ -116,22 +116,22 @@ Claude reaches any method in the third column through `consultar` and `resumir`,
 
 ## Vendas e NF-e
 
-| Endpoint | Service | Methods the connector can call |
+| Endpoint | Serviço | Métodos que o conector pode chamar |
 |---|---|---|
-| `produtos/pedidovenda` | Pedidos de Venda - Resumido | none (this service only writes) |
+| `produtos/pedidovenda` | Pedidos de Venda - Resumido | nenhum (este serviço só grava) |
 | `produtos/pedido` | Pedidos de Venda | `ConsultarPedido`: Consulta de Pedido de Venda de Produto<br>`ListarPedidos`: Listar os pedidos de venda de produto |
 | `produtos/pedidovendafat` | Pedidos de Venda - Faturamento | `ObterPedidosVenda`: Retorna a lista de pedidos de venda a serem faturados. |
 | `produtos/pedidoetapas` | Pedidos de Venda - Etapas | `ListarEtapasPedido`: Lista as etapas do Pedido de Venda de Produtos. |
 | `produtos/cte` | CT-e / CT-e OS | `ListarNFeTransp` |
 | `produtos/remessa` | Remessa de Produtos | `ConsultarRemessa`: Consulta uma remessa.<br>`ListarRemessas`: Lista as remessas cadastradas. |
-| `produtos/remessafat` | Remessa de Produtos - Faturamento | none (this service only writes) |
-| `produtos/devolucaovendafaturamento` | Devolução de venda - Faturamento | none (this service only writes) |
+| `produtos/remessafat` | Remessa de Produtos - Faturamento | nenhum (este serviço só grava) |
+| `produtos/devolucaovendafaturamento` | Devolução de venda - Faturamento | nenhum (este serviço só grava) |
 | `produtos/dfedocs` | Obter Documentos | `ObterCTe`<br>`ObterCupom`<br>`ObterDanfeSimp`<br>`ObterNfe`<br>`ObterPedVenda` |
-| `produtos/cupomfiscalincluir` | Adicionar | none (this service only writes) |
+| `produtos/cupomfiscalincluir` | Adicionar | nenhum (este serviço só grava) |
 | `produtos/cupomfiscal` | Cancelar ou excluir | `ListarCupons`: Lista os Cupons Fiscais.<br>`ObterProximoLote` |
-| `produtos/cupomfiscalconsultar` | Consultar | none (this service only writes) |
-| `produtos/nfce` | Importar NFC-e | none (this service only writes) |
-| `produtos/sat` | Importar CFe-Sat | none (this service only writes) |
+| `produtos/cupomfiscalconsultar` | Consultar | nenhum (este serviço só grava) |
+| `produtos/nfce` | Importar NFC-e | nenhum (este serviço só grava) |
+| `produtos/sat` | Importar CFe-Sat | nenhum (este serviço só grava) |
 | `geral/vendedores` | Vendedores | `ConsultarVendedor`: Consulta os dados de um vendedor<br>`ListarVendedores`: Listagem de Vendedores |
 | `produtos/formaspagvendas` | Formas de Pagamento | `ListarFormasPagVendas`: Lista as formas de pagamento de vendas. |
 | `produtos/tabelaprecos` | Tabela de Preços | `ConsultarTabelaPreco`<br>`ListarTabelaItens`<br>`ListarTabelasPreco` |
@@ -141,12 +141,12 @@ Claude reaches any method in the third column through `consultar` and `resumir`,
 | `geral/origempedido` | Origem do Pedido | `ListarOrigem`: Lista Origem de pedidos. |
 | `geral/motivodevolucao` | Motivos de Devolução | `ListarMotivosDevol` |
 | `produtos/nfconsultar` | Consultas | `ConsultarNF`: Consulta uma Nota Fiscal.<br>`ListarNF`: Listar as Notas Fiscais cadastradas. |
-| `produtos/notafiscalutil` | Utilitários | none (this service only writes) |
+| `produtos/notafiscalutil` | Utilitários | nenhum (este serviço só grava) |
 | `produtos/nfe` | Importar | `ListarNFe`: Lista as NFes importadas. |
 
 ## Serviços e NFS-e
 
-| Endpoint | Service | Methods the connector can call |
+| Endpoint | Serviço | Métodos que o conector pode chamar |
 |---|---|---|
 | `servicos/servico` | Serviços | `ConsultarCadastroServico`<br>`ListarCadastroServico` |
 | `servicos/os` | Ordens de Serviço | `ConsultarOS`<br>`ListarOS` |
@@ -170,16 +170,16 @@ Claude reaches any method in the third column through `consultar` and `resumir`,
 
 ## Painel do Contador
 
-| Endpoint | Service | Methods the connector can call |
+| Endpoint | Serviço | Métodos que o conector pode chamar |
 |---|---|---|
 | `contador/xml` | Documentos Fiscais | `ListarDocumentos`: Lista de XMLs de Documentos Fiscais. |
 | `contador/resumo` | Resumo | `ObterResumoContador`: Obtem o resumo do painel do contador. |
 
-## Reads the connector refuses today
+## Leituras que o conector recusa hoje
 
-These methods look like reads by name or description but don't follow the prefix rule, so the connector refuses them. Most have an accepted counterpart in the same service (stock position through `ListarPosEstoque`, stock movements through `ListarMovimentoEstoque`, an order's status through `ConsultarPedido`). The fiscal coupon listings in `produtos/cupomfiscalconsultar` have none. Any of these would have to be added to the allowlist by exact name, after reading its Omie doc page, before Claude can use it.
+Estes métodos parecem leitura pelo nome ou pela descrição, mas não seguem a regra do prefixo, então o conector recusa. A maioria tem um equivalente aceito no mesmo serviço (posição de estoque pelo `ListarPosEstoque`, movimentos de estoque pelo `ListarMovimentoEstoque`, situação de um pedido pelo `ConsultarPedido`). As listagens de cupom fiscal em `produtos/cupomfiscalconsultar` não têm. Para o Claude poder usar qualquer um deles, ele teria que entrar na lista de permitidos pelo nome exato, depois de ler a página dele na documentação do Omie.
 
-| Endpoint | Method |
+| Endpoint | Método |
 |---|---|
 | `crm/contas` | `VerificarConta`: Verifica se uma conta foi criada a partir do nome e e-mail. |
 | `crm/contatos` | `VerificarContato` |
