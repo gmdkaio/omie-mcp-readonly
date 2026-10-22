@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>omie-mcp-readonly</AssemblyName>
     <RootNamespace>OmieMcpReadonly</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
     <!-- one exe with the runtime inside: nothing to install on the user's PC -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>

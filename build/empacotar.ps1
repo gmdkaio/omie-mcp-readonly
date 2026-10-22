@@ -1,4 +1,4 @@
-# Builds the .mcpb: publishes the single-file exe, puts it next to a manifest and packs both.
+﻿# Builds the .mcpb: publishes the single-file exe, puts it next to a manifest and packs both.
 #   .\build\empacotar.ps1                          generic bundle (keys typed in Claude Desktop's settings)
 #   .\build\empacotar.ps1 -Manifest <path> -Saida <file.mcpb>
 # A client bundle (keys built in) lives outside this repo and calls this script with its own manifest.
@@ -18,6 +18,9 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish falhou" }
 
 Copy-Item (Join-Path $raiz "artifacts\server\omie-mcp-readonly.exe") (Join-Path $palco "server")
 Copy-Item $Manifest (Join-Path $palco "manifest.json")
+# the license and the notices the bundled runtime and packages require go with every bundle
+Copy-Item (Join-Path $raiz "LICENSE") $palco
+Copy-Item (Join-Path $raiz "notices") (Join-Path $palco "notices") -Recurse
 $icone = Join-Path (Split-Path $Manifest) "icon.png"
 if (Test-Path $icone) { Copy-Item $icone $palco }
 

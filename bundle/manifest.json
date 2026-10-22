@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "omie-mcp-readonly",
   "display_name": "Omie (somente leitura)",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Pergunte sobre o seu Omie em português. Só lê: não cria, altera nem exclui nada no Omie.",
   "long_description": "O Claude responde perguntas sobre o seu Omie com os dados do momento. Só lê: toda chamada que não seja de um método Listar, Pesquisar, Consultar ou Obter é recusada no seu PC antes de chegar ao Omie. Totais e rankings são calculados no código, e toda chamada fica registrada em %APPDATA%\\omie-mcp-readonly.",
   "author": { "name": "Kaio (gmdkaio)", "url": "https://github.com/gmdkaio" },
