@@ -1,0 +1,49 @@
+{
+  "manifest_version": "0.3",
+  "name": "omie-mcp-readonly",
+  "display_name": "Omie (somente leitura)",
+  "version": "0.1.0",
+  "description": "Pergunte sobre o seu Omie em português. Só lê: não cria, altera nem exclui nada no Omie.",
+  "long_description": "Lets Claude answer questions about your Omie ERP from live data. It can only read: every call that is not a Listar, Pesquisar, Consultar or Obter method is refused on your PC before reaching Omie. Totals and rankings are computed in code, and every call is logged in %APPDATA%\\omie-mcp-readonly.",
+  "author": { "name": "omie-mcp-readonly contributors" },
+  "license": "UNLICENSED",
+  "keywords": ["omie", "erp", "read-only", "somente leitura"],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/omie-mcp-readonly.exe",
+    "mcp_config": {
+      "command": "${__dirname}/server/omie-mcp-readonly.exe",
+      "args": [],
+      "env": {
+        "OMIE_EMPRESA_1_NOME": "${user_config.empresa_1_nome}",
+        "OMIE_EMPRESA_1_APP_KEY": "${user_config.empresa_1_app_key}",
+        "OMIE_EMPRESA_1_APP_SECRET": "${user_config.empresa_1_app_secret}",
+        "OMIE_EMPRESA_2_NOME": "${user_config.empresa_2_nome}",
+        "OMIE_EMPRESA_2_APP_KEY": "${user_config.empresa_2_app_key}",
+        "OMIE_EMPRESA_2_APP_SECRET": "${user_config.empresa_2_app_secret}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "consultar", "description": "Qualquer consulta de leitura no Omie (até 200 linhas e o total real)." },
+    { "name": "resumir", "description": "Contagens, somas e rankings calculados sobre todas as linhas." },
+    { "name": "clientes_novos", "description": "Clientes novos por período." },
+    { "name": "produtos_mais_vendidos", "description": "Produtos mais vendidos, em quantidade e receita." },
+    { "name": "faturamento_por_cliente", "description": "Faturamento por cliente." },
+    { "name": "contas_receber_vencidas", "description": "Contas a receber vencidas por cliente." },
+    { "name": "contas_pagar_proximos_dias", "description": "Contas a pagar nos próximos dias." }
+  ],
+  "tools_generated": false,
+  "user_config": {
+    "empresa_1_nome": { "type": "string", "title": "Empresa 1: nome", "description": "Como você chama a empresa nas perguntas (ex.: MATRIZ).", "required": true },
+    "empresa_1_app_key": { "type": "string", "title": "Empresa 1: APP KEY", "description": "Omie > Meus Aplicativos > chave da empresa.", "sensitive": true, "required": true },
+    "empresa_1_app_secret": { "type": "string", "title": "Empresa 1: APP SECRET", "description": "Omie > Meus Aplicativos > segredo da mesma chave.", "sensitive": true, "required": true },
+    "empresa_2_nome": { "type": "string", "title": "Empresa 2: nome (opcional)", "description": "Deixe em branco se só tiver uma empresa no Omie.", "required": false },
+    "empresa_2_app_key": { "type": "string", "title": "Empresa 2: APP KEY (opcional)", "description": "Chave da segunda empresa.", "sensitive": true, "required": false },
+    "empresa_2_app_secret": { "type": "string", "title": "Empresa 2: APP SECRET (opcional)", "description": "Segredo da segunda empresa.", "sensitive": true, "required": false }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["win32"]
+  }
+}
