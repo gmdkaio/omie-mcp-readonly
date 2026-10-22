@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OmieMcpReadonly/OmieMcpReadonly.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OmieMcpReadonly.Tests/OmieMcpReadonly.Tests.csproj" />
+  </Folder>
+</Solution>
