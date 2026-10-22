@@ -34,12 +34,25 @@ public sealed class Receitas
         new("pedido.cDevParcial", "!=", "S"),
     ];
 
+    // customer returns are incoming invoices (tpNF 0) whose purpose is devolução (finNFe 4), usually CFOP 1.201/2.201.
+    // Omie's report default view doesn't subtract them, so the headline doesn't either; they come apart, with the net
+    // figure computed here so Claude never does the subtraction itself
+    private static readonly Filtro[] Devolucoes =
+    [
+        new("ide.tpNF", "=", "0"),
+        new("ide.finNFe", "=", "4"),
+        new("ide.dCan", "vazio"),
+        new("ide.dInut", "vazio"),
+        new("ide.cDeneg", "!=", "S"),
+    ];
+
     private const string DefinicaoNotas =
         "Mesma regra do relatório Faturamento por Período do Omie na visão padrão (Operação = Pedido de Venda, " +
         "Situação = Autorizado): NF-e de saída emitidas no período (ide.dEmi) que vieram de um pedido de venda de " +
         "produto, sem as canceladas, inutilizadas e denegadas, e sem as notas de pedidos devolvidos, mesmo que em parte. " +
-        "Remessas (amostras, moldes, conserto, entrega futura) e devoluções de cliente não entram; as devoluções também " +
-        "não são descontadas.";
+        "Remessas (amostras, moldes, conserto, entrega futura) não entram. O número principal não desconta devoluções de " +
+        "cliente, como no relatório; elas vêm à parte em devolucoes (notas de entrada de devolução emitidas no período), " +
+        "e o valor já descontado está em *_menos_devolucoes.";
 
     [McpServerTool(Name = "clientes_novos", Title = "Clientes novos por período", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("How many new clients in a period (cadastros included in Omie with the tag Cliente), month by month, plus every cadastro included in the period broken down by tag (Fornecedor, Transportadora, no tag...). Use for \"quantos clientes novos\"; the headline number is clientes_novos.")]
@@ -108,9 +121,9 @@ public sealed class Receitas
                 "quantidade" => "det.prod.qCom",
                 _ => throw new ArgumentException("ordenar_por deve ser receita ou quantidade."),
             };
-            var (buscas, param) = BuscarNotas(servico, empresa, ref de, ref ate);
-            if (!await servico.AguardarAsync(buscas, ct))
-                return Servico.Andamento(buscas);
+            var (buscas, devolucoes, param) = BuscarNotas(servico, empresa, ref de, ref ate);
+            if (!await servico.AguardarAsync([.. buscas, .. devolucoes], ct))
+                return Servico.Andamento([.. buscas, .. devolucoes]);
 
             var linhas = Servico.Linhas(buscas);
             var saida = Cabecalho("produtos_mais_vendidos", buscas, "produtos/nfconsultar", "ListarNF", param, NotasDeVenda, conferida: false,
@@ -125,7 +138,12 @@ public sealed class Receitas
                 AgruparPor: "det.prod.cProd", Rotulo: "det.prod.xProd", OrdenarPor: ordem, Top: Math.Clamp(top, 1, 500)));
             AdicionarPrecoMedioEUnidade(resumo, linhas);
             saida["resumo"] = resumo;
-            return Finalizar(saida, buscas);
+            var devolvidos = Resumo.Resumir(Servico.Linhas(devolucoes), new PedidoResumo(
+                Expandir: "det", Filtros: Devolucoes, Somar: ["det.prod.vProd", "det.prod.qCom"],
+                AgruparPor: "det.prod.cProd", Rotulo: "det.prod.xProd", Top: 20));
+            saida["devolucoes"] = devolvidos;
+            saida["receita_menos_devolucoes"] = Soma(resumo, "det.prod.vProd") - Soma(devolvidos, "det.prod.vProd");
+            return Finalizar(saida, [.. buscas, .. devolucoes]);
         });
 
     [McpServerTool(Name = "faturamento_por_cliente", Title = "Faturamento por cliente", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
@@ -139,9 +157,9 @@ public sealed class Receitas
         CancellationToken ct = default) =>
         Ferramentas.Executar(async () =>
         {
-            var (buscas, param) = BuscarNotas(servico, empresa, ref de, ref ate);
-            if (!await servico.AguardarAsync(buscas, ct))
-                return Servico.Andamento(buscas);
+            var (buscas, devolucoes, param) = BuscarNotas(servico, empresa, ref de, ref ate);
+            if (!await servico.AguardarAsync([.. buscas, .. devolucoes], ct))
+                return Servico.Andamento([.. buscas, .. devolucoes]);
 
             var linhas = Servico.Linhas(buscas);
             var saida = Cabecalho("faturamento_por_cliente", buscas, "produtos/nfconsultar", "ListarNF", param, NotasDeVenda, conferida: true,
@@ -150,7 +168,11 @@ public sealed class Receitas
             saida["resumo"] = Resumo.Resumir(linhas, new PedidoResumo(
                 Filtros: NotasDeVenda, Somar: ["total.ICMSTot.vNF"], AgruparPor: "nfDestInt.cnpj_cpf",
                 Rotulo: "nfDestInt.cRazao", Top: Math.Clamp(top, 1, 500)));
-            return Finalizar(saida, buscas);
+            var devolvidas = Resumo.Resumir(Servico.Linhas(devolucoes), new PedidoResumo(
+                Filtros: Devolucoes, Somar: ["total.ICMSTot.vNF"], AgruparPor: "nfDestInt.cnpj_cpf", Rotulo: "nfDestInt.cRazao", Top: 20));
+            saida["devolucoes"] = devolvidas;
+            saida["faturamento_menos_devolucoes"] = Soma(saida["resumo"]!.AsObject(), "total.ICMSTot.vNF") - Soma(devolvidas, "total.ICMSTot.vNF");
+            return Finalizar(saida, [.. buscas, .. devolucoes]);
         });
 
     [McpServerTool(Name = "contas_receber_vencidas", Title = "Contas a receber vencidas por cliente", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
@@ -211,12 +233,18 @@ public sealed class Receitas
                 $"e {ate}. Valor = resumo.nValAberto. Contas já vencidas e não pagas, com previsão antes de hoje, não entram.", ct);
         });
 
-    private static (List<Busca>, JsonObject) BuscarNotas(Servico servico, string empresa, ref string de, ref string ate)
+    /// <summary>The issued invoices of the period and, alongside (same method, so one after the other), the customer returns.</summary>
+    private static (List<Busca> Notas, List<Busca> Devolucoes, JsonObject Param) BuscarNotas(Servico servico, string empresa, ref string de, ref string ate)
     {
         (de, ate) = (Servico.Data(de, "de"), Servico.Data(ate, "ate"));
+        var alvo = servico.Empresas.Resolver(empresa);
         var param = new JsonObject { ["dEmiInicial"] = de, ["dEmiFinal"] = ate, ["tpNF"] = "1", ["cDetalhesPedido"] = "S" };
-        return (servico.Iniciar(servico.Empresas.Resolver(empresa), "produtos/nfconsultar", "ListarNF", param), param);
+        var entradas = new JsonObject { ["dEmiInicial"] = de, ["dEmiFinal"] = ate, ["tpNF"] = "0" };
+        return (servico.Iniciar(alvo, "produtos/nfconsultar", "ListarNF", param),
+                servico.Iniciar(alvo, "produtos/nfconsultar", "ListarNF", entradas), param);
     }
+
+    private static decimal Soma(JsonObject resumo, string campo) => resumo["somas"]?[campo]?.GetValue<decimal>() ?? 0m;
 
     /// <summary>
     /// Financial titles grouped by client or supplier. The movimentos only carry the client code, so the client

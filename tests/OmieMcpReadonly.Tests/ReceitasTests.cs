@@ -21,6 +21,13 @@ public class ReceitasTests
         ["total"] = new JsonObject { ["ICMSTot"] = new JsonObject { ["vNF"] = vNF } },
     };
 
+    private static JsonObject Entrada(string cnpj, string razao, string finNFe, decimal vNF, params (string c, decimal q, decimal v, string cfop)[] itens)
+    {
+        var nota = NfDoPedido(cnpj, razao, finNFe, "", vNF, "", "N", itens);
+        nota["ide"]!["tpNF"] = "0";
+        return nota;
+    }
+
     private static JsonObject Titulo(long cliente, string status, string venc, string prev, decimal aberto, string liquidado = "N") => new()
     {
         ["detalhes"] = new JsonObject { ["nCodCliente"] = cliente, ["cStatus"] = status, ["dDtVenc"] = venc, ["dDtPrevisao"] = prev },
@@ -31,6 +38,10 @@ public class ReceitasTests
 
     private static (HttpStatusCode, string) Omie(string caminho, JsonObject corpo) => corpo["call"]!.GetValue<string>() switch
     {
+        // incoming invoices: one customer return (finNFe 4) and one ordinary purchase, which isn't a return
+        "ListarNF" when corpo["param"]![0]!["tpNF"]!.GetValue<string>() == "0" => Ambiente.Ok(Pagina("nfCadastro", "c",
+            Entrada("11", "Alfa", "4", 10m, ("P1", 1, 10m, "1.201")),
+            Entrada("55", "Fornecedor", "1", 300m, ("INSUMO", 3, 300m, "1.101")))),
         "ListarNF" => Ambiente.Ok(Pagina("nfCadastro", "c",
             Nf("11", "Alfa", "1", "", 110m, ("P1", 10, 100m, "5.101")),
             // a sales order with a free sample item: Omie's report counts the whole invoice, so does the recipe
@@ -96,6 +107,8 @@ public class ReceitasTests
         // items of sales-order invoices only: the sample (P3) is in, the mould remessa and the returned order are out
         Assert.Equal(3, r["resumo"]!["total_de_grupos"]!.GetValue<int>());
         Assert.Equal("S", amb.Omie.Pedidos.First(p => p.Corpo["call"]!.GetValue<string>() == "ListarNF").Corpo["param"]![0]!["cDetalhesPedido"]!.GetValue<string>());
+        Assert.Equal("P1", r["devolucoes"]!["grupos"]![0]!["grupo"]!.GetValue<string>());
+        Assert.Equal(r["resumo"]!["somas"]!["det.prod.vProd"]!.GetValue<decimal>() - 10m, r["receita_menos_devolucoes"]!.GetValue<decimal>());
         Assert.False(r["conferida_com_tela_do_omie"]!.GetValue<bool>());
 
         var porQuantidade = JsonNode.Parse(await Receitas.ProdutosMaisVendidos(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026", "quantidade"))!;
@@ -115,6 +128,10 @@ public class ReceitasTests
         // checked against Omie's billing report, so no "not checked yet" warning for the user
         Assert.True(r["conferida_com_tela_do_omie"]!.GetValue<bool>());
         Assert.Null(r["aviso_conferencia"]);
+        // the customer return comes apart and the net figure is computed here; the purchase isn't a return
+        Assert.Equal(10m, r["devolucoes"]!["somas"]!["total.ICMSTot.vNF"]!.GetValue<decimal>());
+        Assert.Equal(1, r["devolucoes"]!["linhas_consideradas"]!.GetValue<int>());
+        Assert.Equal(155.5m, r["faturamento_menos_devolucoes"]!.GetValue<decimal>());
     }
 
     [Fact]
