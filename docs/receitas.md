@@ -10,7 +10,7 @@ Each recipe is a fixed query with its definition decided once. It ships with `co
 | `contas_receber_vencidas` | `financas/mf` `ListarMovimentos`, `cTpLancamento` `CR`, `cStatus` `ATRASADO`, `dDtVencDe` 01/01/2000 to today | titles due before today, `resumo.cLiquidado` not `S`, `resumo.nValAberto` > 0 (partly received ones included), per client | Contas a Receber, filter Atrasados | 22/10/2026 | 22/10/2026, see below |
 | `contas_pagar_proximos_dias` | `financas/mf` `ListarMovimentos`, `cTpLancamento` `CP`, `cStatus` `EMABERTO`, `dDtPrevDe/Ate` today to today + N - 1 | `resumo.nValAberto` per supplier and per day | Contas a Pagar, em aberto, same window | 22/10/2026 | no |
 
-Invoices that count as billing (both invoice recipes): `ide.tpNF` = 1, `ide.finNFe` ≠ 4, `ide.dCan` empty, `ide.dInut` empty, `ide.cDeneg` ≠ `S`, and only sale CFOPs: items with CFOP x.9xx ("outras saídas": remessas, conserto, samples, moulds, the remessa that repeats an entrega-futura sale) are left out of the product ranking, and an invoice with no sale item is left out of billing per client.
+Invoices that count as billing (both invoice recipes) follow Omie's "Faturamento por Período" report in the view it opens with, Operação = Pedido de Venda and Situação = Autorizado: `ListarNF` with `cDetalhesPedido` `S`, `ide.tpNF` = 1, `ide.finNFe` ≠ 4, `ide.dCan` and `ide.dInut` empty, `ide.cDeneg` ≠ `S`, `pedido.opPedido` 11 or 12 (sale of product), and the order not cancelled, returned or partly returned (`pedido.cCancelado`, `cDevolvido`, `cDevParcial` ≠ `S`). Remessas (`opPedido` 14: samples, moulds, conserto, entrega futura) stay out. Customer returns are not subtracted, as in that view.
 
 ## What the first run on real data showed (22/10/2026)
 
@@ -28,7 +28,7 @@ Every recipe ran for two companies at once; the longest took 35 s (the client re
 ## Second check: Omie screens and a management DRE (22/10/2026)
 
 - Overdue receivables: `cStatus` `ATRASADO` misses titles received in part, which the API returns as RECEBIDO with `cLiquidado` `N` and the rest still open; Omie's "Contas a Receber em Atraso" screen counts them. The recipe now selects on the open balance and matched the screen's "a receber hoje" total to the cent. That screen's overdue list can leave out a title that fell due yesterday.
-- Billing: issued invoices with CFOP x.9xx made billing up to 8% higher than the management DRE in a month (moulds sent to clients, conserto returns and remessas). With them left out, four months of billing came within 0,5% of the DRE. The DRE, kept by hand, still counts some x.9xx invoices (a conserto remessa), so an exact match isn't expected.
+- Billing: counting every issued invoice made billing up to 8% higher than a management DRE in a month (moulds sent to clients, conserto returns and remessas). Leaving out CFOP x.9xx came within 0,5% but also dropped invoices Omie counts as sales (a large CFOP 6.909 sale). Omie's report in its default view (Pedido de Venda, Autorizado) matched the DRE to the cent, so the recipes now use that rule; September matched it to the cent and to the invoice for both companies. An invoice Omie shows as "Rejeitado" has no flag in the API; the one found was a remessa, which this rule leaves out.
 - Matched exactly on screen: a bank account balance at month end (realizado and previsto), a product's stock, the count of open sales orders by stage.
 
 ## To settle at the screen check
