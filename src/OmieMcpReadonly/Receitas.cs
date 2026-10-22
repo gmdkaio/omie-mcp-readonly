@@ -143,6 +143,9 @@ public sealed class Receitas
                 AgruparPor: "det.prod.cProd", Rotulo: "det.prod.xProd", Top: 20));
             saida["devolucoes"] = devolvidos;
             saida["receita_menos_devolucoes"] = Soma(resumo, "det.prod.vProd") - Soma(devolvidos, "det.prod.vProd");
+            if (buscas.Count > 1)
+                saida["por_empresa"] = Resumo.Resumir(linhas, new PedidoResumo(
+                    Expandir: "det", Filtros: NotasDeVenda, Somar: ["det.prod.vProd"], AgruparPor: "_empresa", OrdenarPor: "grupo"));
             return Finalizar(saida, [.. buscas, .. devolucoes]);
         });
 
@@ -172,6 +175,13 @@ public sealed class Receitas
                 Filtros: Devolucoes, Somar: ["total.ICMSTot.vNF"], AgruparPor: "nfDestInt.cnpj_cpf", Rotulo: "nfDestInt.cRazao", Top: 20));
             saida["devolucoes"] = devolvidas;
             saida["faturamento_menos_devolucoes"] = Soma(saida["resumo"]!.AsObject(), "total.ICMSTot.vNF") - Soma(devolvidas, "total.ICMSTot.vNF");
+            if (buscas.Count > 1)
+            {
+                saida["por_empresa"] = Resumo.Resumir(linhas, new PedidoResumo(
+                    Filtros: NotasDeVenda, Somar: ["total.ICMSTot.vNF"], AgruparPor: "_empresa", OrdenarPor: "grupo"));
+                saida["devolucoes_por_empresa"] = Resumo.Resumir(Servico.Linhas(devolucoes), new PedidoResumo(
+                    Filtros: Devolucoes, Somar: ["total.ICMSTot.vNF"], AgruparPor: "_empresa", OrdenarPor: "grupo"));
+            }
             return Finalizar(saida, [.. buscas, .. devolucoes]);
         });
 
@@ -233,12 +243,180 @@ public sealed class Receitas
                 $"e {ate}. Valor = resumo.nValAberto. Contas já vencidas e não pagas, com previsão antes de hoje, não entram.", ct);
         });
 
+    [McpServerTool(Name = "faturamento_por_vendedor", Title = "Faturamento por vendedor", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Billing per seller in a period, from issued invoices (same rule as faturamento_por_cliente), with the seller taken from the sales order. Sellers are matched by name across companies. Use for \"quem vendeu mais\", \"vendas por vendedor\".")]
+    public static Task<string> FaturamentoPorVendedor(
+        Servico servico,
+        [Description(Ferramentas.DescricaoEmpresa)] string empresa,
+        [Description("Start date dd/mm/aaaa (emission).")] string de,
+        [Description("End date dd/mm/aaaa (emission).")] string ate,
+        CancellationToken ct = default) =>
+        Ferramentas.Executar(async () =>
+        {
+            (de, ate) = (Servico.Data(de, "de"), Servico.Data(ate, "ate"));
+            var alvo = servico.Empresas.Resolver(empresa);
+            var param = ParamNotas(de, ate);
+            var notas = servico.Iniciar(alvo, "produtos/nfconsultar", "ListarNF", param);
+            var vendedores = servico.Iniciar(alvo, "geral/vendedores", "ListarVendedores", new JsonObject { ["apenas_importado_api"] = "N" });
+            if (!await servico.AguardarAsync([.. notas, .. vendedores], ct))
+                return Servico.Andamento([.. notas, .. vendedores]);
+
+            // each company has its own seller codes, so the same person is matched by name
+            var linhas = new List<JsonObject>();
+            for (var i = 0; i < alvo.Count; i++)
+            {
+                var nomes = vendedores[i].Tarefa.Result
+                    .Where(v => v["codigo"] is not null)
+                    .GroupBy(v => v["codigo"]!.ToString())
+                    .ToDictionary(g => g.Key, g => g.First()["nome"]?.ToString() ?? g.Key);
+                foreach (var n in notas[i].Tarefa.Result)
+                {
+                    var linha = (JsonObject)n.DeepClone();
+                    var codigo = Resumo.Valor(linha, "pedido.nIdVendedor")?.ToString();
+                    var nome = codigo is null || codigo == "0" ? "(sem vendedor)" : nomes.GetValueOrDefault(codigo, $"código {codigo}");
+                    linha["_empresa"] = alvo[i].Nome;
+                    linha["_vendedor"] = nome;
+                    linha["_vendedor_empresa"] = $"{nome} ({alvo[i].Nome})";
+                    linhas.Add(linha);
+                }
+            }
+            var saida = Cabecalho("faturamento_por_vendedor", notas, "produtos/nfconsultar", "ListarNF", param, NotasDeVenda, conferida: true,
+                DefinicaoNotas + " Faturamento = soma do valor total da nota (total.ICMSTot.vNF). Vendedor = o do pedido de " +
+                "venda que originou a nota (pedido.nIdVendedor), pelo nome do cadastro de vendedores de cada empresa.");
+            saida["resumo"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: NotasDeVenda, Somar: ["total.ICMSTot.vNF"], AgruparPor: "_vendedor"));
+            if (alvo.Count > 1)
+            {
+                saida["por_vendedor_e_empresa"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: NotasDeVenda, Somar: ["total.ICMSTot.vNF"], AgruparPor: "_vendedor_empresa"));
+                saida["por_empresa"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: NotasDeVenda, Somar: ["total.ICMSTot.vNF"], AgruparPor: "_empresa", OrdenarPor: "grupo"));
+            }
+            return Finalizar(saida, [.. notas, .. vendedores]);
+        });
+
+    [McpServerTool(Name = "despesas_por_categoria", Title = "Despesas por categoria", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Spending per category in a period, cash basis: what actually left the company's accounts (bank, card, cash), from the bank statements, with transfers between its own accounts left out. Use for \"quanto gastamos por categoria\", \"maiores despesas\", \"para onde foi o dinheiro\". Paid bills alone (financas/mf) miss the entries made straight in the account, such as pró-labore.")]
+    public static Task<string> DespesasPorCategoria(
+        Servico servico,
+        [Description(Ferramentas.DescricaoEmpresa)] string empresa,
+        [Description("Start date dd/mm/aaaa.")] string de,
+        [Description("End date dd/mm/aaaa.")] string ate,
+        [Description("How many categories (default 30).")] int top = 30,
+        CancellationToken ct = default) =>
+        Ferramentas.Executar(async () =>
+        {
+            (de, ate) = (Servico.Data(de, "de"), Servico.Data(ate, "ate"));
+            var alvo = servico.Empresas.Resolver(empresa);
+            var contas = servico.Iniciar(alvo, "geral/contacorrente", "ListarResumoContasCorrentes", new JsonObject());
+            if (!await servico.AguardarAsync(contas, ct))
+                return Servico.Andamento(contas);
+
+            // every account except the advance controls (type AD), which only mirror amounts held for or by others
+            var extratos = new List<(Empresa Empresa, string Conta, Busca Busca)>();
+            for (var i = 0; i < alvo.Count; i++)
+                foreach (var c in contas[i].Tarefa.Result.Where(c => c["tipo"]?.ToString() != "AD" && c["nCodCC"] is not null))
+                {
+                    var param = new JsonObject { ["nCodCC"] = c["nCodCC"]!.DeepClone(), ["dPeriodoInicial"] = de, ["dPeriodoFinal"] = ate };
+                    extratos.Add((alvo[i], c["descricao"]?.ToString() ?? c["nCodCC"]!.ToString(), servico.Iniciar([alvo[i]], "financas/extrato", "ListarExtrato", param)[0]));
+                }
+            var buscas = extratos.Select(e => e.Busca).ToList();
+            if (!await servico.AguardarAsync(buscas, ct))
+                return Servico.Andamento([.. contas, .. buscas]);
+
+            var linhas = new List<JsonObject>();
+            foreach (var (emp, conta, busca) in extratos)
+                foreach (var m in busca.Tarefa.Result)
+                {
+                    var linha = (JsonObject)m.DeepClone();
+                    linha["_empresa"] = emp.Nome;
+                    linha["_conta"] = $"{conta} ({emp.Nome})";
+                    linha["_saida"] = -(Resumo.Numero(linha["nValorDocumento"]) ?? 0m);
+                    linhas.Add(linha);
+                }
+            // an outflow that isn't a transfer to another of the company's own accounts (paying the card bill from the
+            // bank is a transfer; the card's purchases are counted on the card account)
+            Filtro[] saidas = [new("nValorDocumento", "<", 0), new("cOrigem", "nao_contem", "Transfer")];
+            var saida = Cabecalho("despesas_por_categoria", contas, "financas/extrato", "ListarExtrato",
+                new JsonObject { ["dPeriodoInicial"] = de, ["dPeriodoFinal"] = ate, ["contas"] = new JsonArray(extratos.Select(e => (JsonNode)$"{e.Conta} ({e.Empresa.Nome})").ToArray()) },
+                saidas, conferida: false,
+                $"Regime de caixa: saídas lançadas no extrato de cada conta entre {de} e {ate} (banco, cartão, caixa), sem as " +
+                "transferências entre as contas da própria empresa e sem as contas de adiantamento. Valor = nValorDocumento " +
+                "com o sinal invertido; categoria = cDesCategoria do lançamento. Previsões futuras que estejam no extrato entram " +
+                "só se já tiverem data no período.");
+            saida["resumo"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: saidas, Somar: ["_saida"], AgruparPor: "cDesCategoria", Top: Math.Clamp(top, 1, 500)));
+            saida["por_conta"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: saidas, Somar: ["_saida"], AgruparPor: "_conta"));
+            if (alvo.Count > 1)
+                saida["por_empresa"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: saidas, Somar: ["_saida"], AgruparPor: "_empresa", OrdenarPor: "grupo"));
+            return Finalizar(saida, [.. contas, .. buscas]);
+        });
+
+    [McpServerTool(Name = "pedidos_em_aberto", Title = "Pedidos de venda em aberto", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Sales orders not yet billed, by stage (etapa), with count and value, separating quotes (orçamentos) from firm orders. Use for \"pedidos em aberto\", \"carteira de pedidos\", \"o que falta faturar\".")]
+    public static Task<string> PedidosEmAberto(
+        Servico servico,
+        [Description(Ferramentas.DescricaoEmpresa)] string empresa,
+        CancellationToken ct = default) =>
+        Ferramentas.Executar(async () =>
+        {
+            var alvo = servico.Empresas.Resolver(empresa);
+            var etapas = servico.Iniciar(alvo, "produtos/etapafat", "ListarEtapasFaturamento", new JsonObject());
+            if (!await servico.AguardarAsync(etapas, ct))
+                return Servico.Andamento(etapas);
+
+            // stages of operation 11 (Venda de Produto) except 60 Faturado and 70 Entrega; stage 00 holds quotes even when
+            // marked inactive. Reading only these stages avoids paging through every order ever made
+            var pedidos = new List<(Empresa Empresa, string Etapa, string Nome, Busca Busca)>();
+            for (var i = 0; i < alvo.Count; i++)
+            {
+                var venda = etapas[i].Tarefa.Result.FirstOrDefault(o => o["cCodOperacao"]?.ToString() == "11");
+                foreach (var e in (venda?["etapas"] as JsonArray ?? []).OfType<JsonObject>())
+                {
+                    var codigo = e["cCodigo"]?.ToString();
+                    if (codigo is null or "60" or "70") continue;
+                    var nome = e["cDescricao"]?.ToString() is { Length: > 0 } d && d != "<disponível>" ? d : e["cDescrPadrao"]?.ToString() ?? codigo;
+                    var param = new JsonObject { ["etapa"] = codigo, ["apenas_importado_api"] = "N" };
+                    pedidos.Add((alvo[i], codigo, nome, servico.Iniciar([alvo[i]], "produtos/pedido", "ListarPedidos", param)[0]));
+                }
+            }
+            var buscas = pedidos.Select(p => p.Busca).ToList();
+            if (!await servico.AguardarAsync(buscas, ct))
+                return Servico.Andamento([.. etapas, .. buscas]);
+
+            var linhas = new List<JsonObject>();
+            foreach (var (emp, codigo, nome, busca) in pedidos)
+                foreach (var p in busca.Tarefa.Result)
+                {
+                    var linha = (JsonObject)p.DeepClone();
+                    linha["_empresa"] = emp.Nome;
+                    linha["_etapa"] = $"{codigo} {nome}";
+                    linha["_tipo"] = codigo == "00" ? "orçamento" : "pedido";
+                    linhas.Add(linha);
+                }
+            Filtro[] abertos =
+            [
+                new("infoCadastro.cancelado", "!=", "S"),
+                new("infoCadastro.faturado", "!=", "S"),
+                new("infoCadastro.encerrado", "!=", "S"),
+            ];
+            var saida = Cabecalho("pedidos_em_aberto", etapas, "produtos/pedido", "ListarPedidos",
+                new JsonObject { ["etapas"] = new JsonArray(pedidos.Select(p => (JsonNode)$"{p.Etapa} {p.Nome} ({p.Empresa.Nome})").ToArray()) },
+                abertos, conferida: true,
+                "Pedidos de venda de produto (operação 11) nas etapas antes de Faturado (60) e Entrega (70), sem os cancelados, " +
+                "faturados e encerrados. A etapa 00 é de orçamentos; os pedidos firmes são as outras. Valor = " +
+                "total_pedido.valor_total_pedido.");
+            saida["resumo"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: abertos, Somar: ["total_pedido.valor_total_pedido"], AgruparPor: "_etapa", OrdenarPor: "grupo"));
+            saida["por_tipo"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: abertos, Somar: ["total_pedido.valor_total_pedido"], AgruparPor: "_tipo", OrdenarPor: "grupo"));
+            if (alvo.Count > 1)
+                saida["por_empresa"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: abertos, Somar: ["total_pedido.valor_total_pedido"], AgruparPor: "_empresa", OrdenarPor: "grupo"));
+            return Finalizar(saida, [.. etapas, .. buscas]);
+        });
+
+    private static JsonObject ParamNotas(string de, string ate) =>
+        new() { ["dEmiInicial"] = de, ["dEmiFinal"] = ate, ["tpNF"] = "1", ["cDetalhesPedido"] = "S" };
     /// <summary>The issued invoices of the period and, alongside (same method, so one after the other), the customer returns.</summary>
     private static (List<Busca> Notas, List<Busca> Devolucoes, JsonObject Param) BuscarNotas(Servico servico, string empresa, ref string de, ref string ate)
     {
         (de, ate) = (Servico.Data(de, "de"), Servico.Data(ate, "ate"));
         var alvo = servico.Empresas.Resolver(empresa);
-        var param = new JsonObject { ["dEmiInicial"] = de, ["dEmiFinal"] = ate, ["tpNF"] = "1", ["cDetalhesPedido"] = "S" };
+        var param = ParamNotas(de, ate);
         var entradas = new JsonObject { ["dEmiInicial"] = de, ["dEmiFinal"] = ate, ["tpNF"] = "0" };
         return (servico.Iniciar(alvo, "produtos/nfconsultar", "ListarNF", param),
                 servico.Iniciar(alvo, "produtos/nfconsultar", "ListarNF", entradas), param);

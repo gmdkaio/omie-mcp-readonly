@@ -28,6 +28,15 @@ public class ReceitasTests
         return nota;
     }
 
+    private static JsonObject Mov(decimal valor, string categoria, string origem) =>
+        new() { ["nValorDocumento"] = valor, ["cDesCategoria"] = categoria, ["cOrigem"] = origem };
+
+    private static JsonObject Pedido(decimal valor, string cancelado) => new()
+    {
+        ["total_pedido"] = new JsonObject { ["valor_total_pedido"] = valor },
+        ["infoCadastro"] = new JsonObject { ["cancelado"] = cancelado, ["faturado"] = "N", ["encerrado"] = "N" },
+    };
+
     private static JsonObject Titulo(long cliente, string status, string venc, string prev, decimal aberto, string liquidado = "N") => new()
     {
         ["detalhes"] = new JsonObject { ["nCodCliente"] = cliente, ["cStatus"] = status, ["dDtVenc"] = venc, ["dDtPrevisao"] = prev },
@@ -73,6 +82,36 @@ public class ReceitasTests
             Titulo(3, "EMABERTO", Hoje, Hoje, 5m),
             Titulo(4, "EMABERTO", Hoje, Hoje, 6m),
             Titulo(2, "EMABERTO", "01/01/2020", "01/01/2020", 1000m))),
+        "ListarVendedores" => Ambiente.Ok(Pagina("cadastro", "c",
+            new JsonObject { ["codigo"] = 7, ["nome"] = "Ana" }, new JsonObject { ["codigo"] = 8, ["nome"] = "Bia" })),
+        "ListarResumoContasCorrentes" => Ambiente.Ok(Pagina("conta_corrente_lista", "c",
+            new JsonObject { ["nCodCC"] = 1, ["descricao"] = "Banco", ["tipo"] = "CC" },
+            new JsonObject { ["nCodCC"] = 2, ["descricao"] = "Cartão", ["tipo"] = "CR" },
+            new JsonObject { ["nCodCC"] = 3, ["descricao"] = "Adiantamento de Cliente", ["tipo"] = "AD" })),
+        // the bank pays a supplier, pays rent, pays the card bill (a transfer) and receives a sale; the card buys software
+        "ListarExtrato" when corpo["param"]![0]!["nCodCC"]!.GetValue<int>() == 1 => Ambiente.Ok(new JsonObject
+        {
+            ["nCodCC"] = 1, ["nSaldoAtual"] = 500m,
+            ["listaMovimentos"] = new JsonArray(
+                Mov(-100m, "Matéria prima", "Conta Paga"), Mov(-40m, "Aluguel", "Débito em Conta Corrente"),
+                Mov(-30m, "Transferência", "Débito de Transferência"), Mov(250m, "Venda", "Conta Recebida")),
+        }),
+        "ListarExtrato" when corpo["param"]![0]!["nCodCC"]!.GetValue<int>() == 2 => Ambiente.Ok(new JsonObject
+        {
+            ["nCodCC"] = 2, ["listaMovimentos"] = new JsonArray(Mov(-30m, "Software", "Conta Paga"), Mov(30m, "Transferência", "Crédito de Transferência")),
+        }),
+        "ListarExtrato" => throw new InvalidOperationException("a conta de adiantamento não deveria ser lida"),
+        "ListarEtapasFaturamento" => Ambiente.Ok(Pagina("cadastros", "c",
+            new JsonObject { ["cCodOperacao"] = "11", ["etapas"] = new JsonArray(
+                new JsonObject { ["cCodigo"] = "00", ["cDescricao"] = "Orçamento" }, new JsonObject { ["cCodigo"] = "10", ["cDescricao"] = "Pedido de Venda" },
+                new JsonObject { ["cCodigo"] = "60", ["cDescricao"] = "Faturado" }, new JsonObject { ["cCodigo"] = "70", ["cDescricao"] = "Entrega" }) },
+            new JsonObject { ["cCodOperacao"] = "21", ["etapas"] = new JsonArray(new JsonObject { ["cCodigo"] = "10", ["cDescricao"] = "Pedido de Compra" }) })),
+        "ListarPedidos" => corpo["param"]![0]!["etapa"]!.GetValue<string>() switch
+        {
+            "00" => Ambiente.Ok(Pagina("pedido_venda_produto", "c", Pedido(1000m, "N"))),
+            "10" => Ambiente.Ok(Pagina("pedido_venda_produto", "c", Pedido(300m, "N"), Pedido(50m, "S"))),
+            var etapa => throw new InvalidOperationException("etapa fechada lida: " + etapa),
+        },
         var m => throw new InvalidOperationException("método inesperado " + m),
     };
 
@@ -85,6 +124,9 @@ public class ReceitasTests
         await Receitas.FaturamentoPorCliente(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026");
         await Receitas.ContasReceberVencidas(amb.Servico, "MATRIZ");
         await Receitas.ContasPagarProximosDias(amb.Servico, "MATRIZ");
+        await Receitas.DespesasPorCategoria(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026");
+        await Receitas.PedidosEmAberto(amb.Servico, "MATRIZ");
+        await Receitas.FaturamentoPorVendedor(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026");
 
         Assert.NotEmpty(amb.Omie.Pedidos);
         Assert.All(amb.Omie.Pedidos, p =>
@@ -177,5 +219,50 @@ public class ReceitasTests
         Assert.Equal("Cliente", todos["por_tag"]!["grupos"]![0]!["grupo"]!.GetValue<string>());
         Assert.Equal(1, todos["sem_tag"]!.GetValue<int>());
         Assert.Equal("S", amb.Omie.Pedidos[0].Corpo["param"]![0]!["filtrar_apenas_inclusao"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Despesas_por_categoria_tira_transferencias_e_adiantamento()
+    {
+        using var amb = new Ambiente(Omie);
+        var r = JsonNode.Parse(await Receitas.DespesasPorCategoria(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026"))!;
+        var grupos = r["resumo"]!["grupos"]!.AsArray();
+
+        // 100 + 40 from the bank and 30 of software on the card; the card bill paid from the bank is a transfer
+        Assert.Equal(170m, r["resumo"]!["somas"]!["_saida"]!.GetValue<decimal>());
+        Assert.Equal(["Matéria prima", "Aluguel", "Software"], grupos.Select(g => g!["grupo"]!.GetValue<string>()));
+        Assert.Equal(2, r["por_conta"]!["total_de_grupos"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Pedidos_em_aberto_le_so_as_etapas_abertas_e_separa_orcamentos()
+    {
+        using var amb = new Ambiente(Omie);
+        var r = JsonNode.Parse(await Receitas.PedidosEmAberto(amb.Servico, "MATRIZ"))!;
+
+        // the cancelled order is out; stages 60 and 70 are never read (the fake throws if they are)
+        Assert.Equal(2, r["resumo"]!["linhas_consideradas"]!.GetValue<int>());
+        Assert.Equal(1300m, r["resumo"]!["somas"]!["total_pedido.valor_total_pedido"]!.GetValue<decimal>());
+        var tipos = r["por_tipo"]!["grupos"]!.AsArray().ToDictionary(g => g!["grupo"]!.GetValue<string>(), g => g!["contagem"]!.GetValue<int>());
+        Assert.Equal(1, tipos["orçamento"]);
+        Assert.Equal(1, tipos["pedido"]);
+    }
+
+    [Fact]
+    public async Task Faturamento_por_vendedor_usa_o_nome_do_cadastro()
+    {
+        using var amb = new Ambiente((caminho, corpo) => corpo["call"]!.GetValue<string>() == "ListarNF" && corpo["param"]![0]!["tpNF"]!.GetValue<string>() == "1"
+            ? Ambiente.Ok(Pagina("nfCadastro", "c", ComVendedor(Nf("11", "Alfa", "1", "", 100m, ("P1", 1, 100m, "5.101")), 7), ComVendedor(Nf("22", "Beta", "1", "", 40m, ("P1", 1, 40m, "5.101")), 0)))
+            : Omie(caminho, corpo));
+        var r = JsonNode.Parse(await Receitas.FaturamentoPorVendedor(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026"))!;
+        var grupos = r["resumo"]!["grupos"]!.AsArray();
+        Assert.Equal(["Ana", "(sem vendedor)"], grupos.Select(g => g!["grupo"]!.GetValue<string>()));
+        Assert.Equal(100m, grupos[0]!["somas"]!["total.ICMSTot.vNF"]!.GetValue<decimal>());
+    }
+
+    private static JsonObject ComVendedor(JsonObject nota, long vendedor)
+    {
+        nota["pedido"]!["nIdVendedor"] = vendedor;
+        return nota;
     }
 }
