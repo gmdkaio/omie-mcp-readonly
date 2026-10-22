@@ -109,7 +109,7 @@ public class ReceitasTests
         Assert.Equal("S", amb.Omie.Pedidos.First(p => p.Corpo["call"]!.GetValue<string>() == "ListarNF").Corpo["param"]![0]!["cDetalhesPedido"]!.GetValue<string>());
         Assert.Equal("P1", r["devolucoes"]!["grupos"]![0]!["grupo"]!.GetValue<string>());
         Assert.Equal(r["resumo"]!["somas"]!["det.prod.vProd"]!.GetValue<decimal>() - 10m, r["receita_menos_devolucoes"]!.GetValue<decimal>());
-        Assert.False(r["conferida_com_tela_do_omie"]!.GetValue<bool>());
+        Assert.True(r["conferida_com_tela_do_omie"]!.GetValue<bool>());
 
         var porQuantidade = JsonNode.Parse(await Receitas.ProdutosMaisVendidos(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026", "quantidade"))!;
         Assert.Equal("P2", porQuantidade["resumo"]!["grupos"]![0]!["grupo"]!.GetValue<string>());

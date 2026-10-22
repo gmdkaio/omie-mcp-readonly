@@ -126,7 +126,7 @@ public sealed class Receitas
                 return Servico.Andamento([.. buscas, .. devolucoes]);
 
             var linhas = Servico.Linhas(buscas);
-            var saida = Cabecalho("produtos_mais_vendidos", buscas, "produtos/nfconsultar", "ListarNF", param, NotasDeVenda, conferida: false,
+            var saida = Cabecalho("produtos_mais_vendidos", buscas, "produtos/nfconsultar", "ListarNF", param, NotasDeVenda, conferida: true,
                 DefinicaoNotas + " Uma linha por item de nota (det). Receita = soma de det.prod.vProd (valor bruto dos " +
                 "produtos, sem IPI, ST e frete, antes de descontos); quantidade = soma de det.prod.qCom na unidade " +
                 "comercial de cada produto (campo unidade; MI = milheiro, então 2,6 MI são 2.600 peças); preço médio = " +
