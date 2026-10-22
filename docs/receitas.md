@@ -1,41 +1,43 @@
-# Recipes: definitions and checks against Omie
+# Receitas: definições e conferência com o Omie
 
-Each recipe is a fixed query with its definition decided once. It ships with `conferida: true` in `Receitas.cs` only after its numbers matched the Omie screen named below, for a period chosen at check time. Until then the tool answer carries `aviso_conferencia` and Claude tells the user the calculation was not checked yet.
+Cada receita é uma consulta fixa com a definição decidida uma vez só. Ela sai com `conferida: true` em `Receitas.cs` só depois que os números bateram com a tela do Omie indicada abaixo, num período escolhido na hora da conferência. Até lá a resposta da ferramenta traz `aviso_conferencia` e o Claude avisa o usuário que o cálculo ainda não foi conferido.
 
-| Recipe | Omie call | Definition | Screen compared | Real data | Checked on screen |
+| Receita | Chamada no Omie | Definição | Tela comparada | Dados reais | Conferida na tela |
 |---|---|---|---|---|---|
-| `clientes_novos` | `geral/clientes` `ListarClientes`, `filtrar_por_data_de/ate`, `filtrar_apenas_inclusao` `S` | cadastro with `info.dInc` in the period (also filtered here) and the tag Cliente, by month; every cadastro included in the period, by tag and without tag, as detail | Clientes > Exibir todos, Inclusão "Esse ano" | 22/10/2026 | 22/10/2026: one company, the year to date; total, month by month and by tag all match |
-| `produtos_mais_vendidos` | `produtos/nfconsultar` `ListarNF` with `cDetalhesPedido` `S`, `dEmiInicial/dEmiFinal`, `tpNF` `1` | items of the invoices that count as billing (below); receita = `det.prod.vProd`, quantidade = `det.prod.qCom` in the product's unit (`det.prod.uCom`) | Faturamento por Período by product (Total de Mercadoria, Quantidade), default view | 22/10/2026 | no |
-| `faturamento_por_cliente` | same invoices | `total.ICMSTot.vNF` per `nfDestInt.cnpj_cpf` | Faturamento por Período, default view (Pedido de Venda, Autorizado) | 22/10/2026 | 22/10/2026: two companies, one month and a whole year; total and invoice count match to the cent (the ranking per client was not compared line by line) |
-| `contas_receber_vencidas` | `financas/mf` `ListarMovimentos`, `cTpLancamento` `CR`, `cStatus` `ATRASADO`, `dDtVencDe` 01/01/2000 to today | titles due before today, `resumo.cLiquidado` not `S`, `resumo.nValAberto` > 0 (partly received ones included), per client | Finanças Resumo and Contas a Receber em Atraso | 22/10/2026 | 22/10/2026: one company; total matches to the cent |
-| `contas_pagar_proximos_dias` | `financas/mf` `ListarMovimentos`, `cTpLancamento` `CP`, `cStatus` `EMABERTO`, `dDtPrevDe/Ate` today to today + N - 1 | `resumo.nValAberto` per supplier and per day | Contas a Pagar, em aberto, same window | 22/10/2026 | 22/10/2026: one company, 30 days; totals per date and per creditor match (two bills paid in Omie during the check explain the rest) |
-Invoices that count as billing (both invoice recipes) follow Omie's "Faturamento por Período" report in the view it opens with, Operação = Pedido de Venda and Situação = Autorizado: `ListarNF` with `cDetalhesPedido` `S`, `ide.tpNF` = 1, `ide.finNFe` ≠ 4, `ide.dCan` and `ide.dInut` empty, `ide.cDeneg` ≠ `S`, `pedido.opPedido` 11 or 12 (sale of product), and the order not cancelled, returned or partly returned (`pedido.cCancelado`, `cDevolvido`, `cDevParcial` ≠ `S`). Remessas (`opPedido` 14: samples, moulds, conserto, entrega futura) stay out. Customer returns are not subtracted, as in that view.
+| `clientes_novos` | `geral/clientes` `ListarClientes`, `filtrar_por_data_de/ate`, `filtrar_apenas_inclusao` `S` | cadastro com `info.dInc` no período (filtrado aqui também) e a tag Cliente, por mês; todos os cadastros incluídos no período, por tag e sem tag, como detalhe | Clientes > Exibir todos, Inclusão "Esse ano" | 22/10/2026 | 22/10/2026: uma empresa, o ano até a data; total, mês a mês e por tag batem |
+| `produtos_mais_vendidos` | `produtos/nfconsultar` `ListarNF` com `cDetalhesPedido` `S`, `dEmiInicial/dEmiFinal`, `tpNF` `1` | itens das notas que contam como faturamento (abaixo); receita = `det.prod.vProd`, quantidade = `det.prod.qCom` na unidade do produto (`det.prod.uCom`) | Faturamento por Período por produto (Total de Mercadoria, Quantidade), visão padrão | 22/10/2026 | não |
+| `faturamento_por_cliente` | as mesmas notas | `total.ICMSTot.vNF` por `nfDestInt.cnpj_cpf` | Faturamento por Período, visão padrão (Pedido de Venda, Autorizado) | 22/10/2026 | 22/10/2026: duas empresas, um mês e um ano inteiro; total e número de notas batem no centavo (o ranking por cliente não foi comparado linha a linha) |
+| `contas_receber_vencidas` | `financas/mf` `ListarMovimentos`, `cTpLancamento` `CR`, `cStatus` `ATRASADO`, `dDtVencDe` 01/01/2000 até hoje | títulos vencidos antes de hoje, `resumo.cLiquidado` diferente de `S`, `resumo.nValAberto` > 0 (com os recebidos em parte), por cliente | Finanças Resumo e Contas a Receber em Atraso | 22/10/2026 | 22/10/2026: uma empresa; total bate no centavo |
+| `contas_pagar_proximos_dias` | `financas/mf` `ListarMovimentos`, `cTpLancamento` `CP`, `cStatus` `EMABERTO`, `dDtPrevDe/Ate` de hoje até hoje + N - 1 | `resumo.nValAberto` por fornecedor e por dia | Contas a Pagar, em aberto, mesma janela | 22/10/2026 | 22/10/2026: uma empresa, 30 dias; totais por data e por credor batem (duas contas pagas no Omie durante a conferência explicam o resto) |
 
-## What the first run on real data showed (22/10/2026)
+As notas que contam como faturamento (nas duas receitas de notas) seguem o relatório "Faturamento por Período" do Omie na visão com que ele abre, Operação = Pedido de Venda e Situação = Autorizado: `ListarNF` com `cDetalhesPedido` `S`, `ide.tpNF` = 1, `ide.finNFe` ≠ 4, `ide.dCan` e `ide.dInut` vazios, `ide.cDeneg` ≠ `S`, `pedido.opPedido` 11 ou 12 (venda de produto), e o pedido não cancelado, devolvido ou devolvido em parte (`pedido.cCancelado`, `cDevolvido`, `cDevParcial` ≠ `S`). Remessas (`opPedido` 14: amostras, moldes, conserto, entrega futura) ficam de fora. Devoluções de clientes não são descontadas, como nessa visão.
 
-Every recipe ran for two companies at once; the longest took 35 s (the client register, about 47 pages per company, read alongside the titles).
+## O que a primeira rodada com dados reais mostrou (22/10/2026)
 
-- Omie refuses `Content-Type: application/json; charset=utf-8` with a SOAP "Bad Request" envelope on every method. The client sends exactly `application/json`, and that envelope is no longer retried.
-- All the field paths above exist in real responses. Titles also carry the client's CNPJ (`detalhes.cCPFCNPJCliente`) and invoice items carry the CFOP (`det.prod.CFOP`).
-- `filtrar_por_data_de/ate` with `filtrar_apenas_inclusao` does filter by `info.dInc`: every record returned was inside the period.
-- `cStatus` `ATRASADO` on `ListarMovimentos` also returns some titles with status RECEBIDO that still have an open amount. The first version filtered `detalhes.cStatus` again and left them out; the screen check showed that was wrong (see below).
-- A cancelled invoice comes with `ide.dCan` filled and `ide.cDeneg` `N`. The `dCan` filter is the one that matters.
-- `qCom` is in each product's commercial unit, often `MI` (milheiro). A quantity ranking compares products in different units, so every product now carries its unit and the overall quantity sum is not to be quoted.
-- Government payees (DAS, payroll, taxes) share the CNPJ `00.000.000/0000-00`. A CNPJ made only of zeros no longer serves as the grouping key, so they don't merge under one name.
-- Many cadastros have no tag at all, and the register also holds suppliers, carriers and staff. Decided on 22/10/2026: a new client is a cadastro included in the period with the tag Cliente (with or without other tags). The rest is reported under `todos_os_cadastros`.
+Todas as receitas rodaram para duas empresas ao mesmo tempo; a mais longa levou 35 s (o cadastro de clientes, umas 47 páginas por empresa, lido junto com os títulos).
 
-## Second check: Omie screens and a management DRE (22/10/2026)
+- O Omie recusa `Content-Type: application/json; charset=utf-8` com um envelope SOAP de "Bad Request" em todos os métodos. O cliente manda `application/json` exato, e esse envelope não é mais repetido.
+- Todos os caminhos de campo acima existem nas respostas reais. Os títulos também trazem o CNPJ do cliente (`detalhes.cCPFCNPJCliente`) e os itens de nota trazem o CFOP (`det.prod.CFOP`).
+- `filtrar_por_data_de/ate` com `filtrar_apenas_inclusao` filtra mesmo por `info.dInc`: todos os registros devolvidos estavam dentro do período.
+- `cStatus` `ATRASADO` no `ListarMovimentos` também devolve alguns títulos com status RECEBIDO que ainda têm valor em aberto. A primeira versão filtrava `detalhes.cStatus` de novo e deixava esses de fora; a conferência na tela mostrou que isso estava errado (ver abaixo).
+- Uma nota cancelada vem com `ide.dCan` preenchido e `ide.cDeneg` `N`. O filtro que vale é o de `dCan`.
+- `qCom` vem na unidade comercial de cada produto, muitas vezes `MI` (milheiro). Um ranking por quantidade compara produtos em unidades diferentes, então cada produto agora leva a sua unidade e a soma geral de quantidade não deve ser citada.
+- Favorecidos do governo (DAS, folha, impostos) compartilham o CNPJ `00.000.000/0000-00`. Um CNPJ só de zeros não serve mais como chave de agrupamento, para eles não se juntarem sob um nome só.
+- Muitos cadastros não têm tag nenhuma, e o cadastro também guarda fornecedores, transportadoras e funcionários. Decidido em 22/10/2026: cliente novo é um cadastro incluído no período com a tag Cliente (com ou sem outras tags). O resto aparece em `todos_os_cadastros`.
 
-- Overdue receivables: `cStatus` `ATRASADO` misses titles received in part, which the API returns as RECEBIDO with `cLiquidado` `N` and the rest still open; Omie's "Contas a Receber em Atraso" screen counts them. The recipe now selects on the open balance and matched the screen's "a receber hoje" total to the cent. That screen's overdue list can leave out a title that fell due yesterday.
-- Billing: counting every issued invoice made billing up to 8% higher than a management DRE in a month (moulds sent to clients, conserto returns and remessas). Leaving out CFOP x.9xx came within 0,5% but also dropped invoices Omie counts as sales (a large CFOP 6.909 sale). Omie's report in its default view (Pedido de Venda, Autorizado) matched the DRE to the cent, so the recipes now use that rule; one month and a whole year matched it to the cent and to the invoice for both companies. An invoice Omie shows as "Rejeitado" has no flag in the API; the one found was a remessa, which this rule leaves out.
-- Matched exactly on screen: a bank account balance at month end (realizado and previsto), a product's stock, the count of open sales orders by stage.
+## Segunda conferência: telas do Omie e um DRE gerencial (22/10/2026)
 
-## To settle at the screen check
-- Whether `EMABERTO` on contas a pagar includes titles already overdue (the recipe leaves out anything with previsão before today either way).
+- Contas a receber vencidas: `cStatus` `ATRASADO` perde os títulos recebidos em parte, que a API devolve como RECEBIDO com `cLiquidado` `N` e o resto ainda em aberto; a tela "Contas a Receber em Atraso" do Omie conta esses títulos. A receita agora seleciona pelo saldo em aberto e bateu no centavo com o total "a receber hoje" da tela. A lista de atrasados dessa tela pode deixar de fora um título que venceu ontem.
+- Faturamento: contar todas as notas emitidas deixou o faturamento até 8% acima de um DRE gerencial num mês (moldes enviados a clientes, retornos de conserto e remessas). Tirar os CFOP x.9xx chegou a 0,5% de diferença, mas também derrubou notas que o Omie conta como venda (uma venda grande com CFOP 6.909). O relatório do Omie na visão padrão (Pedido de Venda, Autorizado) bateu no centavo com o DRE, então as receitas agora usam essa regra; um mês e um ano inteiro bateram no centavo e na nota para as duas empresas. Uma nota que o Omie mostra como "Rejeitado" não tem marcação na API; a encontrada era uma remessa, que essa regra deixa de fora.
+- Bateram exatamente na tela: o saldo de uma conta corrente no fim do mês (realizado e previsto), o estoque de um produto, a contagem de pedidos de venda em aberto por etapa.
 
-## How to record a check
+## Para resolver na conferência de tela
 
-1. Pick a closed period (a month works) and one company.
-2. Ask the question in Claude Desktop with the extension installed, and open the matching Omie screen with the same filters.
-3. Compare the total and the first five lines of the ranking.
-4. When they match, set `conferida: true` for that recipe in `Receitas.cs` and write the date and period in the Screen column above.
+- Se `EMABERTO` em contas a pagar inclui títulos já vencidos (a receita deixa de fora qualquer coisa com previsão antes de hoje de qualquer jeito).
+
+## Como registrar uma conferência
+
+1. Escolha um período fechado (um mês serve) e uma empresa.
+2. Faça a pergunta no Claude Desktop com a extensão instalada e abra a tela correspondente do Omie com os mesmos filtros.
+3. Compare o total e as cinco primeiras linhas do ranking.
+4. Quando baterem, coloque `conferida: true` para essa receita em `Receitas.cs` e escreva a data e o período na coluna `Conferida na tela` acima.
