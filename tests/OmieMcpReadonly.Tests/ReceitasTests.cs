@@ -112,6 +112,9 @@ public class ReceitasTests
         Assert.Equal(["11", "22"], grupos.Select(g => g!["grupo"]!.GetValue<string>()));
         Assert.Equal("Alfa", grupos[0]!["rotulo"]!.GetValue<string>());
         Assert.Equal(165.5m, r["resumo"]!["somas"]!["total.ICMSTot.vNF"]!.GetValue<decimal>());
+        // checked against Omie's billing report, so no "not checked yet" warning for the user
+        Assert.True(r["conferida_com_tela_do_omie"]!.GetValue<bool>());
+        Assert.Null(r["aviso_conferencia"]);
     }
 
     [Fact]
@@ -127,6 +130,7 @@ public class ReceitasTests
         Assert.Equal(101m, grupos[0]!["somas"]!["resumo.nValAberto"]!.GetValue<decimal>());
         Assert.Equal("Beta SA", grupos[1]!["rotulo"]!.GetValue<string>());
         Assert.Equal(80m, grupos[1]!["somas"]!["resumo.nValAberto"]!.GetValue<decimal>());
+        Assert.True(r["conferida_com_tela_do_omie"]!.GetValue<bool>());
         Assert.Equal("(sem cadastro)", grupos[2]!["rotulo"]!.GetValue<string>());
     }
 

@@ -69,7 +69,7 @@ public sealed class Receitas
             // one with the tag Cliente. Unnesting tags gives one row per tag, and a cadastro has Cliente at most once
             Filtro[] clientes = [.. noPeriodo, new("tags.tag", "=", "Cliente")];
             var linhas = Servico.Linhas(buscas);
-            var saida = Cabecalho("clientes_novos", buscas, "geral/clientes", "ListarClientes", param, clientes, conferida: false,
+            var saida = Cabecalho("clientes_novos", buscas, "geral/clientes", "ListarClientes", param, clientes, conferida: true,
                 $"Cliente novo = cadastro incluído no Omie (data de inclusão, info.dInc) entre {de} e {ate} e marcado " +
                 "com a tag Cliente. O cadastro do Omie também guarda fornecedores, transportadoras, prestadores e " +
                 "cadastros sem tag: esses não contam como cliente novo e aparecem só no detalhamento por tag. Cadastros " +
@@ -144,7 +144,7 @@ public sealed class Receitas
                 return Servico.Andamento(buscas);
 
             var linhas = Servico.Linhas(buscas);
-            var saida = Cabecalho("faturamento_por_cliente", buscas, "produtos/nfconsultar", "ListarNF", param, NotasDeVenda, conferida: false,
+            var saida = Cabecalho("faturamento_por_cliente", buscas, "produtos/nfconsultar", "ListarNF", param, NotasDeVenda, conferida: true,
                 DefinicaoNotas + " Faturamento = soma do valor total da nota (total.ICMSTot.vNF, com impostos e frete). " +
                 "Clientes agrupados pelo CNPJ/CPF do destinatário, então o mesmo cliente nas duas empresas soma junto.");
             saida["resumo"] = Resumo.Resumir(linhas, new PedidoResumo(
@@ -180,7 +180,7 @@ public sealed class Receitas
                 new("resumo.nValAberto", ">", 0),
                 new("detalhes.dDtVenc", "<", hoje),
             ];
-            return await PorClienteAsync(servico, empresa, "contas_receber_vencidas", param, filtros, top, ordenarPorData: false,
+            return await PorClienteAsync(servico, empresa, "contas_receber_vencidas", param, filtros, top, ordenarPorData: false, conferida: true,
                 $"Títulos de contas a receber vencidos antes de hoje ({hoje}), não liquidados e com valor em aberto, inclusive " +
                 "os recebidos em parte. Valor = resumo.nValAberto (o que falta receber, já descontado o que foi pago). " +
                 "Agrupado por cliente. A tela de atrasados do Omie pode deixar de fora um título vencido ontem.", ct);
@@ -206,7 +206,7 @@ public sealed class Receitas
                 ["dDtPrevAte"] = ate,
             };
             Filtro[] filtros = [new("detalhes.dDtPrevisao", ">=", de), new("detalhes.dDtPrevisao", "<=", ate)];
-            return await PorClienteAsync(servico, empresa, "contas_pagar_proximos_dias", param, filtros, top, ordenarPorData: true,
+            return await PorClienteAsync(servico, empresa, "contas_pagar_proximos_dias", param, filtros, top, ordenarPorData: true, conferida: true,
                 $"Títulos de contas a pagar com status EM ABERTO e previsão de pagamento (detalhes.dDtPrevisao) entre {de} " +
                 $"e {ate}. Valor = resumo.nValAberto. Contas já vencidas e não pagas, com previsão antes de hoje, não entram.", ct);
         });
@@ -224,7 +224,7 @@ public sealed class Receitas
     /// CNPJs on the codes. Grouping is by CNPJ, so with both companies the same client adds up together.
     /// </summary>
     private static async Task<JsonObject> PorClienteAsync(Servico servico, string empresa, string receita, JsonObject param,
-                                                          Filtro[] filtros, int top, bool ordenarPorData, string definicao,
+                                                          Filtro[] filtros, int top, bool ordenarPorData, bool conferida, string definicao,
                                                           CancellationToken ct)
     {
         var alvo = servico.Empresas.Resolver(empresa);
@@ -260,7 +260,7 @@ public sealed class Receitas
             }
         }
 
-        var saida = Cabecalho(receita, titulos, "financas/mf", "ListarMovimentos", param, filtros, conferida: false, definicao);
+        var saida = Cabecalho(receita, titulos, "financas/mf", "ListarMovimentos", param, filtros, conferida, definicao);
         saida["resumo"] = Resumo.Resumir(linhas, new PedidoResumo(
             Filtros: filtros, Somar: ["resumo.nValAberto"], AgruparPor: "_cliente", Rotulo: "_cliente_nome", Top: Math.Clamp(top, 1, 500)));
         if (ordenarPorData)
