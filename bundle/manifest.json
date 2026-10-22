@@ -4,9 +4,9 @@
   "display_name": "Omie (somente leitura)",
   "version": "0.1.0",
   "description": "Pergunte sobre o seu Omie em português. Só lê: não cria, altera nem exclui nada no Omie.",
-  "long_description": "Lets Claude answer questions about your Omie ERP from live data. It can only read: every call that is not a Listar, Pesquisar, Consultar or Obter method is refused on your PC before reaching Omie. Totals and rankings are computed in code, and every call is logged in %APPDATA%\\omie-mcp-readonly.",
-  "author": { "name": "omie-mcp-readonly contributors" },
-  "license": "UNLICENSED",
+  "long_description": "O Claude responde perguntas sobre o seu Omie com os dados do momento. Só lê: toda chamada que não seja de um método Listar, Pesquisar, Consultar ou Obter é recusada no seu PC antes de chegar ao Omie. Totais e rankings são calculados no código, e toda chamada fica registrada em %APPDATA%\\omie-mcp-readonly.",
+  "author": { "name": "Kaio (gmdkaio)", "url": "https://github.com/gmdkaio" },
+  "license": "PolyForm-Noncommercial-1.0.0",
   "keywords": ["omie", "erp", "read-only", "somente leitura"],
   "server": {
     "type": "binary",
