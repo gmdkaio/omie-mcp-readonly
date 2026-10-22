@@ -1,0 +1,135 @@
+﻿using System.Net;
+using System.Text.Json.Nodes;
+
+namespace OmieMcpReadonly.Tests;
+
+public class ReceitasTests
+{
+    private static JsonObject Pagina(string lista, string estilo, params JsonObject[] itens) => estilo == "n"
+        ? new JsonObject { ["nPagina"] = 1, ["nTotPaginas"] = 1, ["nRegistros"] = itens.Length, ["nTotRegistros"] = itens.Length, [lista] = new JsonArray(itens) }
+        : new JsonObject { ["pagina"] = 1, ["total_de_paginas"] = 1, ["registros"] = itens.Length, ["total_de_registros"] = itens.Length, [lista] = new JsonArray(itens) };
+
+    private static JsonObject Nf(string cnpj, string razao, string finNFe, string dCan, decimal vNF, params (string c, decimal q, decimal v)[] itens) => new()
+    {
+        ["ide"] = new JsonObject { ["dEmi"] = "10/03/2026", ["tpNF"] = "1", ["finNFe"] = finNFe, ["dCan"] = dCan, ["dInut"] = "", ["cDeneg"] = "N" },
+        ["nfDestInt"] = new JsonObject { ["cnpj_cpf"] = cnpj, ["cRazao"] = razao },
+        ["det"] = new JsonArray(itens.Select(i => (JsonNode)new JsonObject { ["prod"] = new JsonObject { ["cProd"] = i.c, ["xProd"] = "Produto " + i.c, ["qCom"] = i.q, ["vProd"] = i.v, ["uCom"] = "MI" } }).ToArray()),
+        ["total"] = new JsonObject { ["ICMSTot"] = new JsonObject { ["vNF"] = vNF } },
+    };
+
+    private static JsonObject Titulo(long cliente, string status, string venc, string prev, decimal aberto) => new()
+    {
+        ["detalhes"] = new JsonObject { ["nCodCliente"] = cliente, ["cStatus"] = status, ["dDtVenc"] = venc, ["dDtPrevisao"] = prev },
+        ["resumo"] = new JsonObject { ["nValAberto"] = aberto },
+    };
+
+    private static readonly string Hoje = DateTime.Now.ToString("dd/MM/yyyy");
+
+    private static (HttpStatusCode, string) Omie(string caminho, JsonObject corpo) => corpo["call"]!.GetValue<string>() switch
+    {
+        "ListarNF" => Ambiente.Ok(Pagina("nfCadastro", "c",
+            Nf("11", "Alfa", "1", "", 110m, ("P1", 10, 100m)),
+            Nf("22", "Beta", "1", "", 55m, ("P1", 1, 10m), ("P2", 40, 40m)),
+            Nf("22", "Beta", "4", "", 999m, ("P1", 99, 999m)),
+            Nf("11", "Alfa", "1", "12/03/2026", 777m, ("P2", 77, 777m)))),
+        "ListarClientes" => Ambiente.Ok(Pagina("clientes_cadastro", "c",
+            new JsonObject { ["codigo_cliente_omie"] = 1, ["cnpj_cpf"] = "11", ["razao_social"] = "Alfa Ltda", ["nome_fantasia"] = "Alfa", ["info"] = new JsonObject { ["dInc"] = "03/01/2026" }, ["tags"] = new JsonArray(new JsonObject { ["tag"] = "Cliente" }) },
+            new JsonObject { ["codigo_cliente_omie"] = 2, ["cnpj_cpf"] = "22", ["razao_social"] = "Beta SA", ["nome_fantasia"] = "", ["info"] = new JsonObject { ["dInc"] = "20/02/2026" }, ["tags"] = new JsonArray(new JsonObject { ["tag"] = "Fornecedor" }) },
+            new JsonObject { ["codigo_cliente_omie"] = 3, ["cnpj_cpf"] = "00.000.000/0000-00", ["razao_social"] = "SIMPLES NACIONAL", ["info"] = new JsonObject { ["dInc"] = "10/01/2026" }, ["tags"] = new JsonArray() },
+            new JsonObject { ["codigo_cliente_omie"] = 4, ["cnpj_cpf"] = "00.000.000/0000-00", ["razao_social"] = "FOLHA", ["info"] = new JsonObject { ["dInc"] = "10/05/2025" } })),
+        "ListarMovimentos" when corpo["param"]![0]!["cTpLancamento"]!.GetValue<string>() == "CR" => Ambiente.Ok(Pagina("movimentos", "n",
+            Titulo(1, "ATRASADO", "01/01/2026", "01/01/2026", 100.50m),
+            Titulo(1, "ATRASADO", "01/02/2026", "01/02/2026", 0.50m),
+            Titulo(2, "ATRASADO", "01/02/2026", "01/02/2026", 30m),
+            Titulo(9, "ATRASADO", "01/02/2026", "01/02/2026", 5m))),
+        "ListarMovimentos" => Ambiente.Ok(Pagina("movimentos", "n",
+            Titulo(2, "EMABERTO", Hoje, Hoje, 70m),
+            Titulo(3, "EMABERTO", Hoje, Hoje, 5m),
+            Titulo(4, "EMABERTO", Hoje, Hoje, 6m),
+            Titulo(2, "EMABERTO", "01/01/2020", "01/01/2020", 1000m))),
+        var m => throw new InvalidOperationException("método inesperado " + m),
+    };
+
+    [Fact]
+    public async Task Todas_as_receitas_so_chamam_metodos_de_leitura()
+    {
+        using var amb = new Ambiente(Omie);
+        await Receitas.ClientesNovos(amb.Servico, "MATRIZ", "01/01/2026", "31/03/2026");
+        await Receitas.ProdutosMaisVendidos(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026");
+        await Receitas.FaturamentoPorCliente(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026");
+        await Receitas.ContasReceberVencidas(amb.Servico, "MATRIZ");
+        await Receitas.ContasPagarProximosDias(amb.Servico, "MATRIZ");
+
+        Assert.NotEmpty(amb.Omie.Pedidos);
+        Assert.All(amb.Omie.Pedidos, p =>
+            Assert.Null(ReadOnlyGuard.Recusa(new Uri(p.Url).AbsolutePath["/api/v1/".Length..], p.Corpo["call"]!.GetValue<string>())));
+    }
+
+    [Fact]
+    public async Task Produtos_mais_vendidos_tira_devolucao_e_cancelada()
+    {
+        using var amb = new Ambiente(Omie);
+        var r = JsonNode.Parse(await Receitas.ProdutosMaisVendidos(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026"))!;
+        var grupos = r["resumo"]!["grupos"]!.AsArray();
+
+        Assert.Equal("P1", grupos[0]!["grupo"]!.GetValue<string>());
+        Assert.Equal(110m, grupos[0]!["somas"]!["det.prod.vProd"]!.GetValue<decimal>());
+        Assert.Equal(11m, grupos[0]!["somas"]!["det.prod.qCom"]!.GetValue<decimal>());
+        Assert.Equal(10m, grupos[0]!["preco_medio"]!.GetValue<decimal>());
+        Assert.Equal("MI", grupos[0]!["unidade"]!.GetValue<string>());
+        Assert.Equal(40m, grupos[1]!["somas"]!["det.prod.vProd"]!.GetValue<decimal>());
+        Assert.False(r["conferida_com_tela_do_omie"]!.GetValue<bool>());
+
+        var porQuantidade = JsonNode.Parse(await Receitas.ProdutosMaisVendidos(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026", "quantidade"))!;
+        Assert.Equal("P2", porQuantidade["resumo"]!["grupos"]![0]!["grupo"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Faturamento_por_cliente_agrupa_por_cnpj()
+    {
+        using var amb = new Ambiente(Omie);
+        var r = JsonNode.Parse(await Receitas.FaturamentoPorCliente(amb.Servico, "MATRIZ", "01/03/2026", "31/03/2026"))!;
+        var grupos = r["resumo"]!["grupos"]!.AsArray();
+        Assert.Equal(["11", "22"], grupos.Select(g => g!["grupo"]!.GetValue<string>()));
+        Assert.Equal("Alfa", grupos[0]!["rotulo"]!.GetValue<string>());
+        Assert.Equal(165m, r["resumo"]!["somas"]!["total.ICMSTot.vNF"]!.GetValue<decimal>());
+    }
+
+    [Fact]
+    public async Task Vencidas_por_cliente_com_nome_do_cadastro()
+    {
+        using var amb = new Ambiente(Omie);
+        var r = JsonNode.Parse(await Receitas.ContasReceberVencidas(amb.Servico, "MATRIZ"))!;
+        var grupos = r["resumo"]!["grupos"]!.AsArray();
+
+        Assert.Equal(136m, r["resumo"]!["somas"]!["resumo.nValAberto"]!.GetValue<decimal>());
+        Assert.Equal("Alfa", grupos[0]!["rotulo"]!.GetValue<string>());
+        Assert.Equal(101m, grupos[0]!["somas"]!["resumo.nValAberto"]!.GetValue<decimal>());
+        Assert.Equal("Beta SA", grupos[1]!["rotulo"]!.GetValue<string>());
+        Assert.Equal("(sem cadastro)", grupos[2]!["rotulo"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Contas_a_pagar_so_dentro_da_janela()
+    {
+        using var amb = new Ambiente(Omie);
+        var r = JsonNode.Parse(await Receitas.ContasPagarProximosDias(amb.Servico, "MATRIZ", dias: 30))!;
+        Assert.Equal(81m, r["resumo"]!["somas"]!["resumo.nValAberto"]!.GetValue<decimal>());
+        // two payees with the all-zeros CNPJ stay apart
+        Assert.Equal(3, r["resumo"]!["total_de_grupos"]!.GetValue<int>());
+        var param = r["consulta"]!["parametros"]!;
+        Assert.Equal(Hoje, param["dDtPrevDe"]!.GetValue<string>());
+        Assert.Equal(DateTime.Now.AddDays(29).ToString("dd/MM/yyyy"), param["dDtPrevAte"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Clientes_novos_por_mes_e_por_tag()
+    {
+        using var amb = new Ambiente(Omie);
+        var r = JsonNode.Parse(await Receitas.ClientesNovos(amb.Servico, "MATRIZ", "01/01/2026", "31/01/2026"))!;
+        Assert.Equal(2, r["por_mes"]!["linhas_consideradas"]!.GetValue<int>());
+        Assert.Equal("Cliente", r["por_tag"]!["grupos"]![0]!["grupo"]!.GetValue<string>());
+        Assert.Equal(1, r["sem_tag"]!.GetValue<int>());
+        Assert.Equal("S", amb.Omie.Pedidos[0].Corpo["param"]![0]!["filtrar_apenas_inclusao"]!.GetValue<string>());
+    }
+}
