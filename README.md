@@ -1,46 +1,46 @@
 # omie-mcp-readonly
 
-Ask Claude about your company's Omie ERP in plain Portuguese and get answers computed from live Omie data. It runs on your own PC as a Claude Desktop extension, reads any part of Omie, and can't create, change or delete anything there.
+Pergunte ao Claude sobre o Omie da sua empresa em português comum e receba respostas calculadas com os dados do Omie na hora. Roda no seu próprio PC como extensão do Claude Desktop, lê qualquer parte do Omie e não consegue criar, alterar nem excluir nada lá.
 
-## Why read-only
+## Por que só leitura
 
-Omie keys can't be limited: each company has one key with full access to every module, so whatever holds the key decides what can happen to the ERP, and asking an AI model not to write is no guarantee. This connector refuses every call that isn't a read on your PC, before it reaches Omie. The community Omie MCP servers found on 22/10/2026 can all write, several can delete records or pay bills, one keeps the keys on a third-party server, and none handles more than one company.
+As chaves do Omie não aceitam limite: cada empresa tem uma chave com acesso total a todos os módulos, então quem guarda a chave decide o que pode acontecer com o ERP, e pedir a uma IA que não escreva não garante nada. Este conector recusa no PC toda chamada que não seja de leitura, antes de ela chegar ao Omie. Os servidores MCP do Omie feitos pela comunidade e encontrados em 22/10/2026 escrevem todos, vários excluem registros ou pagam contas, um guarda as chaves num servidor de terceiros e nenhum atende mais de uma empresa.
 
-## Features
+## Recursos
 
-- Read-only in code: any method that doesn't start with `Listar`, `Pesquisar`, `Consultar` or `Obter` is refused, and the refusal is logged.
-- Totals, counts and rankings are computed in code over every record, and Claude quotes them.
-- Each answer says how the number was obtained: company, period, what was counted and what was left out.
-- Fixed recipes for the usual questions (new clients, best-selling products, billing per client, overdue receivables, payables due soon), each one compared with Omie's own screens before it counts as done.
-- A built-in catalog of every Omie service, with each method's parameters and fields, for the questions the recipes don't cover.
-- More than one company in the same install, with answers per company or combined.
-- Long queries keep running in the background, and Claude picks up where it stopped.
-- Every call to Omie is logged on the PC for 30 days.
+- Só leitura no código: qualquer método que não comece com `Listar`, `Pesquisar`, `Consultar` ou `Obter` é recusado, e a recusa fica no log.
+- Totais, contagens e rankings são calculados no código sobre todos os registros, e o Claude cita esses números.
+- Cada resposta diz como o número saiu: empresa, período, o que foi contado e o que ficou de fora.
+- Receitas fixas para as perguntas de sempre (clientes novos, produtos mais vendidos, faturamento por cliente, contas a receber vencidas, contas a pagar dos próximos dias), cada uma comparada com as telas do próprio Omie antes de valer.
+- Um catálogo embutido de todos os serviços do Omie, com os parâmetros e campos de cada método, para as perguntas que as receitas não cobrem.
+- Mais de uma empresa na mesma instalação, com respostas por empresa ou somadas.
+- Consultas longas continuam rodando em segundo plano, e o Claude retoma de onde parou.
+- Toda chamada ao Omie fica registrada no PC por 30 dias.
 
-## Modules
+## Módulos
 
-What it can read, grouped as in Omie. The full list of 134 services and 201 read methods is in [docs/catalogo-omie.md](docs/catalogo-omie.md).
+O que ele consegue ler, agrupado como no Omie. A lista completa, com 134 serviços e 201 métodos de leitura, está em [docs/catalogo-omie.md](docs/catalogo-omie.md).
 
-| Module | What it can pull |
+| Módulo | O que dá para puxar |
 |---|---|
-| Geral | Clients and suppliers, products, categories, departments, projects, bank accounts, sellers, DRE accounts |
-| CRM | Accounts, contacts, opportunities, tasks |
-| Finanças | Contas a pagar and a receber, financial movements, bank statements, cash, finance summaries |
-| Compras, Estoque e Produção | Purchase orders, incoming invoices, production orders, stock position and movements |
-| Vendas e NF-e | Sales orders, issued invoices, price tables, shipments, CT-e |
-| Serviços e NFS-e | Service orders, contracts, NFS-e |
-| Painel do Contador | Accountant summary and XML files |
+| Geral | Clientes e fornecedores, produtos, categorias, departamentos, projetos, contas correntes, vendedores, contas do DRE |
+| CRM | Contas, contatos, oportunidades, tarefas |
+| Finanças | Contas a pagar e a receber, movimentos financeiros, extratos, caixa, resumos de finanças |
+| Compras, Estoque e Produção | Pedidos de compra, notas de entrada, ordens de produção, posição e movimentos de estoque |
+| Vendas e NF-e | Pedidos de venda, notas emitidas, tabelas de preço, remessas, CT-e |
+| Serviços e NFS-e | Ordens de serviço, contratos, NFS-e |
+| Painel do Contador | Resumo do contador e arquivos XML |
 
-## Examples
+## Exemplos
 
 > quantos clientes novos tivemos em 2026?
 
-Claude asks which company, then gives the count month by month. It says a new client is a cadastro included in the period with the tag Cliente, and how many cadastros had no tag.
+O Claude pergunta qual empresa e dá a contagem mês a mês. Diz que cliente novo é um cadastro incluído no período com a tag Cliente, e quantos cadastros estavam sem tag.
 
 > quem está devendo pra gente?
 
-The amount still open per client, bills paid in part included, largest first.
+O valor ainda em aberto por cliente, com as contas pagas em parte, do maior para o menor.
 
 > cria um cliente novo chamado Teste
 
-Refused before anything reaches Omie. Claude explains that the connector only reads and that this has to be done in Omie.
+Recusado antes de chegar ao Omie. O Claude explica que o conector só lê e que isso tem que ser feito no Omie.
