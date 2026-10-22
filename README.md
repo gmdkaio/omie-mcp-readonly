@@ -14,7 +14,7 @@ What it does not protect against: the keys still exist. Anyone who gets a bundle
 
 ## Status
 
-Version 0.1, not released. The read-only guard, paging, Omie's retry rules, the summaries and the local log are built and tested (84 tests against a fake Omie). Every tool has also run against a real Omie account with two companies. The five recipes below still need to match the matching Omie screen before they count as done ([docs/receitas.md](docs/receitas.md)); until then Claude says so in its answers.
+Version 0.1, not released. The read-only guard, paging, Omie's retry rules, the summaries and the local log are built and tested (81 tests against a fake Omie). Every tool has also run against a real Omie account with two companies. The five recipes below still need to match the matching Omie screen before they count as done ([docs/receitas.md](docs/receitas.md)); until then Claude says so in its answers.
 
 ## How it is used
 
@@ -48,7 +48,6 @@ With more than one company, Claude asks which one if the question doesn't say ("
 - Ask it to create or change anything and it explains that it can only read; do that in Omie.
 - Every call to Omie is logged in `%APPDATA%\omie-mcp-readonly\` (time, company, method, filters, number of records, duration; no keys, no amounts returned). Logs older than 30 days are deleted.
 - Omie announced (14/09/2026) a monthly fee per company using its API, R$ 49,90, with no start date yet. The fee is Omie's.
-- Contact data stays out of the chat: e-mails, phones, street addresses and bank details are removed before Omie's answer reaches Claude, and a person's CPF is masked (***.456.789-**). Company CNPJs, names, cities and amounts stay.
 - Your Omie data passes through Claude to answer. On a personal Pro or Max plan, turn off model training in Claude's privacy settings if you don't want these chats used for training; Team and Enterprise plans don't train on chats by default.
 
 ## What Claude can call

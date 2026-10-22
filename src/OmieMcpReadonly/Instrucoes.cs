@@ -32,8 +32,5 @@ public static class Instrucoes
         - If the user asks to create, change, delete, pay, issue or send anything, explain that this connector only
           reads and that it has to be done in Omie itself. Do not look for another method to do it.
         - Omie error messages are in Portuguese; pass on the gist in plain words.
-        - The connector removes personal contact data before it reaches you: e-mails, phones, street addresses and
-          bank details come as "[removido]", and a person's CPF comes masked (***.456.789-**). If the user asks for
-          one of those, say the connector doesn't show them and that they are in the cadastro in Omie.
         """;
 }

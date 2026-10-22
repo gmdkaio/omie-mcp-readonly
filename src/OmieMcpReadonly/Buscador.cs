@@ -91,7 +91,7 @@ public sealed partial class Buscador(IReadOnlyDictionary<string, OmieClient> cli
             // Consultar/Obter return one record; only Listar/Pesquisar page
             if (!metodo.StartsWith("Listar") && !metodo.StartsWith("Pesquisar"))
             {
-                var unica = (JsonObject?)Privacidade.Limpar(await cliente.ChamarAsync(endpoint, metodo, parametros, busca.Avisar));
+                var unica = await cliente.ChamarAsync(endpoint, metodo, parametros, busca.Avisar);
                 busca.PaginasLidas = 1;
                 if (unica is not null) linhas.Add(unica);
                 busca.TotalRegistros = linhas.Count;
@@ -106,7 +106,7 @@ public sealed partial class Buscador(IReadOnlyDictionary<string, OmieClient> cli
                 // a list method without page fields answers everything in one call
                 if (chavePagina is not null) p[chavePagina] = pagina;
                 if (chaveTamanho is not null) p[chaveTamanho] = tamanho;
-                var resposta = (JsonObject?)Privacidade.Limpar(await cliente.ChamarAsync(endpoint, metodo, p, busca.Avisar));
+                var resposta = await cliente.ChamarAsync(endpoint, metodo, p, busca.Avisar);
                 busca.PaginasLidas++;
                 if (resposta is null) break;
 
