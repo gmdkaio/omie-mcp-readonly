@@ -3,8 +3,8 @@ using System.Text.RegularExpressions;
 namespace OmieMcpReadonly;
 
 /// <summary>
-/// The read-only promise. Omie keys can't be restricted (one key per company, full access to every module), so this
-/// check is the only thing between the model and a write. Every call goes through <see cref="OmieClient"/>, which
+/// Decides which calls are reads. Omie keys can't be restricted (one key per company, full access to every module),
+/// so this check is the only thing between the model and a write. Every call goes through <see cref="OmieClient"/>, which
 /// asks this before building the request; a refused call never reaches the network.
 /// </summary>
 public static partial class ReadOnlyGuard

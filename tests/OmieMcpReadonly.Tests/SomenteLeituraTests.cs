@@ -4,7 +4,7 @@ using ModelContextProtocol;
 
 namespace OmieMcpReadonly.Tests;
 
-/// <summary>The read-only promise: a write never leaves the PC, whichever way it is asked.</summary>
+/// <summary>A write never leaves the PC, whichever way it is asked.</summary>
 public class SomenteLeituraTests
 {
     [Theory]

@@ -117,8 +117,8 @@ public static class Resumo
     {
         if (no is not JsonValue v) return null;
         decimal d;
-        // the JSON text, not TryGetValue<decimal>: a value built from an int or a double doesn't convert, and a
-        // double would lose cents
+        // parsed from the JSON text: TryGetValue<decimal> fails on a value built from an int or a double, and going
+        // through double would lose cents
         if (v.GetValueKind() == System.Text.Json.JsonValueKind.Number)
             return decimal.TryParse(v.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out d) ? d : null;
         if (!v.TryGetValue<string>(out var s) || string.IsNullOrWhiteSpace(s)) return null;

@@ -51,7 +51,7 @@ public sealed class Receitas
             if (!await servico.AguardarAsync(buscas, ct))
                 return Servico.Andamento(buscas);
 
-            // the date filter is applied again here: Omie's filter is the first line, this one is the definition
+            // the date filter runs again here: Omie's filter limits what is downloaded, this one is what gets counted
             Filtro[] noPeriodo = [new("info.dInc", ">=", de), new("info.dInc", "<=", ate)];
             // the client register also holds suppliers, carriers, staff and cadastros with no tag: a new client is
             // one with the tag Cliente. Unnesting tags gives one row per tag, and a cadastro has Cliente at most once
