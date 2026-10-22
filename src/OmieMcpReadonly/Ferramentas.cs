@@ -87,6 +87,12 @@ public sealed class Ferramentas
                 saida["linhas"] = Lista(mostradas);
             }
             saida["linhas_devolvidas"] = mostradas;
+            // fields outside the record list (a statement's balances, for one): with cExibirApenasSaldo they are all there is
+            var dados = buscas.Where(b => b.DadosDaResposta is not null).ToList();
+            if (dados.Count == 1 && buscas.Count == 1)
+                saida["dados_da_resposta"] = dados[0].DadosDaResposta!.DeepClone();
+            else if (dados.Count > 0)
+                saida["dados_da_resposta"] = new JsonObject(dados.Select(b => KeyValuePair.Create(b.Empresa, (JsonNode?)b.DadosDaResposta!.DeepClone())));
             saida["nota"] = total > mostradas
                 ? $"{total:N0} encontrados, mostrando {mostradas}" +
                   (mostradas < linhas.Count ? " (registros grandes: use campos para ver mais por vez)" : "") +
@@ -99,9 +105,9 @@ public sealed class Ferramentas
 
     [McpServerTool(Name = "resumir", Title = "Resumir dados do Omie", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("""
-        Same query as consultar, but reads every row and computes the answer in code: row count, sums, and grouping by
-        one field with a top N. This is the tool for any total, count, average base or ranking; the numbers it returns
-        are exact, so quote them instead of recomputing.
+        Same query as consultar, but reads every row and computes the answer in code: row count, sums, averages (each
+        sum divided by the row count, overall and per group), and grouping by one field with a top N. This is the tool
+        for any total, count, average or ranking; the numbers it returns are exact, so quote them instead of recomputing.
         Steps, in order: expandir (unnest an array, e.g. "det" to get one row per invoice item, parent fields kept),
         filtros (all must match), then somar and agrupar_por. Field paths are dotted, e.g. ide.dEmi, det.prod.vProd,
         detalhes.nCodCliente, resumo.nValAberto. The catalogo tool lists every field path of a method's records; a
@@ -109,6 +115,8 @@ public sealed class Ferramentas
         Filter operators: = != > >= < <= contem nao_contem em nao_em (valor is a list) vazio preenchido. Dates
         dd/mm/aaaa compare as dates, numbers as numbers.
         When several companies are asked, each row also has _empresa (you can group by it).
+        Filter a product by its code (det.prod.cProd, cCodigo), not by words of its name: names are shared by variants
+        of the same item. Bank statement outflows are negative: use crescente to list the biggest expenses first.
         """)]
     public static Task<string> Resumir(
         Servico servico,
@@ -124,6 +132,7 @@ public sealed class Ferramentas
         [Description("Field shown as the name of each group, e.g. det.prod.xProd when grouping by product code.")] string? rotulo = null,
         [Description("contagem, grupo, or one of the somar fields. Default: first somar field, else contagem.")] string? ordenar_por = null,
         [Description("How many groups to return (default 50); the rest are summed in outros.")] int? top = null,
+        [Description("true to list smallest first (e.g. negative outflows, so the biggest expenses come first).")] bool crescente = false,
         CancellationToken ct = default) =>
         Executar(async () =>
         {
@@ -133,7 +142,7 @@ public sealed class Ferramentas
             if (!await servico.AguardarAsync(buscas, ct))
                 return Servico.Andamento(buscas);
 
-            var pedido = new PedidoResumo(expandir, filtros, somar, agrupar_por, periodo, rotulo, ordenar_por, top);
+            var pedido = new PedidoResumo(expandir, filtros, somar, agrupar_por, periodo, rotulo, ordenar_por, top, crescente);
             return Montar(buscas, endpoint, metodo, param, pedido);
         });
 

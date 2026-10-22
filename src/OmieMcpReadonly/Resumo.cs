@@ -12,6 +12,7 @@ public sealed record Filtro(string Campo, string Operador, JsonNode? Valor = nul
 /// <param name="Rotulo">Field shown next to each group (a name for a code), taken from the group's first row.</param>
 /// <param name="OrdenarPor">"contagem", "grupo" or one of the <paramref name="Somar"/> fields; default the first sum, else the count.</param>
 /// <param name="Top">Groups to return; the rest are added up in "outros".</param>
+/// <param name="Crescente">Smallest first. Outflows in a bank statement are negative, so the biggest expenses are the smallest numbers.</param>
 public sealed record PedidoResumo(
     string? Expandir = null,
     IReadOnlyList<Filtro>? Filtros = null,
@@ -20,7 +21,8 @@ public sealed record PedidoResumo(
     string? Periodo = null,
     string? Rotulo = null,
     string? OrdenarPor = null,
-    int? Top = null);
+    int? Top = null,
+    bool Crescente = false);
 
 /// <summary>
 /// Counts, sums and groupings computed here over every row, so an answer never depends on Claude adding up a table.
@@ -58,6 +60,7 @@ public static class Resumo
         if (somar.Count > 0)
         {
             resultado["somas"] = somas;
+            resultado["medias"] = Medias(somas, consideradas.Count);
             if (semValor.Count > 0) resultado["linhas_sem_valor_numerico"] = semValor;
         }
 
@@ -78,6 +81,7 @@ public static class Resumo
             _ => throw new ArgumentException($"ordenar_por deve ser contagem, grupo ou um dos campos somados ({string.Join(", ", somar)})."),
         };
         var lista = ordenados.ToList();
+        if (pedido.Crescente) lista.Reverse();
         var top = Math.Max(1, pedido.Top ?? TopPadrao);
 
         var saida = new JsonArray();
@@ -87,11 +91,15 @@ public static class Resumo
             if (pedido.Rotulo is not null)
                 item["rotulo"] = g.Linhas.Select(l => Texto(Valor(l, pedido.Rotulo))).FirstOrDefault(t => t is not null);
             item["contagem"] = g.Linhas.Count;
-            if (somar.Count > 0) item["somas"] = g.Somas;
+            if (somar.Count > 0)
+            {
+                item["somas"] = g.Somas;
+                item["medias"] = Medias(g.Somas, g.Linhas.Count);
+            }
             saida.Add(item);
         }
         resultado["agrupado_por"] = pedido.AgruparPor + (pedido.Periodo is null ? "" : $" (por {pedido.Periodo})");
-        resultado["ordenado_por"] = ordem;
+        resultado["ordenado_por"] = ordem + (pedido.Crescente ? " (crescente)" : "");
         resultado["total_de_grupos"] = lista.Count;
         resultado["grupos"] = saida;
         if (lista.Count > top)
@@ -102,6 +110,15 @@ public static class Resumo
             resultado["outros"] = outros;
         }
         return resultado;
+    }
+
+    /// <summary>Each sum divided by the row count (an average ticket, an average price), so Claude doesn't divide by hand.</summary>
+    private static JsonObject Medias(JsonObject somas, int linhas)
+    {
+        var medias = new JsonObject();
+        foreach (var (campo, soma) in somas)
+            medias[campo] = linhas == 0 ? null : Math.Round(soma!.GetValue<decimal>() / linhas, 2);
+        return medias;
     }
 
     /// <summary>The value at a dotted path ("ide.dEmi", "det.prod.vProd"). Null when missing or when it crosses an array.</summary>

@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 
 namespace OmieMcpReadonly.Tests;
 
@@ -91,5 +91,19 @@ public class ResumoTests
     {
         var e = Assert.Throws<ArgumentException>(() => Resumo.Resumir(Notas, new PedidoResumo(Filtros: [new("x", "like", "a")])));
         Assert.Contains("contem", e.Message);
+    }
+
+    [Fact]
+    public void Crescente_poe_as_maiores_saidas_primeiro_e_medias_saem_prontas()
+    {
+        var linhas = new List<JsonObject>
+        {
+            new() { ["cat"] = "Aluguel", ["v"] = -40m }, new() { ["cat"] = "Resina", ["v"] = -100m },
+            new() { ["cat"] = "Resina", ["v"] = -60m }, new() { ["cat"] = "Venda", ["v"] = 250m },
+        };
+        var r = Resumo.Resumir(linhas, new PedidoResumo(Somar: ["v"], AgruparPor: "cat", Crescente: true));
+        Assert.Equal(["Resina", "Aluguel", "Venda"], r["grupos"]!.AsArray().Select(g => g!["grupo"]!.GetValue<string>()));
+        Assert.Equal(12.5m, r["medias"]!["v"]!.GetValue<decimal>());
+        Assert.Equal(-80m, r["grupos"]![0]!["medias"]!["v"]!.GetValue<decimal>());
     }
 }

@@ -190,4 +190,18 @@ public class FerramentasTests
         amb.Log.ApagarAntigos(new DateTime(2026, 10, 22));
         Assert.Equal(["chamadas-2026-10-01.jsonl"], Directory.GetFiles(amb.PastaLog).Select(Path.GetFileName));
     }
+
+    [Fact]
+    public async Task Consultar_traz_os_campos_fora_da_lista_e_conta_as_linhas_lidas()
+    {
+        // a statement asked for balances only: the list is empty and the balances sit outside it; Omie's total says 34
+        using var amb = new Ambiente((_, _) => Ambiente.Ok(new JsonObject
+        {
+            ["total_de_registros"] = 34, ["nCodCC"] = 1, ["nSaldoAtual"] = 112535.32m, ["listaMovimentos"] = new JsonArray(),
+        }));
+        var r = JsonNode.Parse(await Ferramentas.Consultar(amb.Servico, "MATRIZ", "financas/extrato", "ListarExtrato", new JsonObject { ["cExibirApenasSaldo"] = "S" }))!;
+        Assert.Equal(112535.32m, r["dados_da_resposta"]!["nSaldoAtual"]!.GetValue<decimal>());
+        Assert.Null(r["dados_da_resposta"]!["total_de_registros"]);
+        Assert.Equal(0, r["total_de_registros"]!.GetValue<int>());
+    }
 }

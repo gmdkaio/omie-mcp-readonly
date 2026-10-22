@@ -20,6 +20,12 @@ public sealed class Busca
     public int? TotalPaginas { get; set; }
     public int? TotalRegistros { get; set; }
 
+    /// <summary>
+    /// The first page's own fields outside the record list and the paging fields: the balances of a bank statement,
+    /// the account a statement belongs to. With cExibirApenasSaldo = S they are the whole answer.
+    /// </summary>
+    public JsonObject? DadosDaResposta { get; set; }
+
     public void Avisar(string texto) { lock (_trava) _avisos.Add(texto); }
     public IReadOnlyList<string> Avisos { get { lock (_trava) return [.. _avisos]; } }
 }
@@ -113,6 +119,7 @@ public sealed partial class Buscador(IReadOnlyDictionary<string, OmieClient> cli
                 busca.TotalPaginas ??= Total(resposta, TotalPaginas());
                 busca.TotalRegistros ??= Total(resposta, TotalRegistros());
                 var lista = ListaPrincipal(resposta);
+                busca.DadosDaResposta ??= DadosForaDaLista(resposta, lista);
                 if (lista is null)
                 {
                     linhas.Add(resposta);
@@ -122,6 +129,10 @@ public sealed partial class Buscador(IReadOnlyDictionary<string, OmieClient> cli
                 if (chavePagina is null || lista.Count == 0 || pagina >= (busca.TotalPaginas ?? pagina) || linhas.Count >= limite)
                     break;
             }
+            // read to the end, the rows are the count: Omie's own total can count something else (the stage list
+            // reports 34, its stages, for 12 operations)
+            if (limite is null || linhas.Count < limite)
+                busca.TotalRegistros = linhas.Count;
             busca.TotalRegistros ??= linhas.Count;
             return limite is null || linhas.Count <= limite ? linhas : linhas.Take(limite.Value).ToList();
         }
@@ -158,6 +169,19 @@ public sealed partial class Buscador(IReadOnlyDictionary<string, OmieClient> cli
 
     [System.Text.RegularExpressions.GeneratedRegex("(?i)^n?tot.*reg")]
     private static partial System.Text.RegularExpressions.Regex TotalRegistros();
+
+    private static JsonObject? DadosForaDaLista(JsonObject resposta, JsonArray? lista)
+    {
+        var dados = new JsonObject();
+        foreach (var (chave, valor) in resposta)
+        {
+            if (ReferenceEquals(valor, lista) || valor is JsonArray || TotalPaginas().IsMatch(chave) || TotalRegistros().IsMatch(chave)
+                || chave is "pagina" or "nPagina" or "registros" or "nRegistros")
+                continue;
+            dados[chave] = valor?.DeepClone();
+        }
+        return dados.Count == 0 ? null : dados;
+    }
 
     private static int? Total(JsonObject resposta, System.Text.RegularExpressions.Regex nome) =>
         resposta.Where(p => nome.IsMatch(p.Key)).Select(p => Inteiro(resposta, p.Key)).FirstOrDefault(i => i is not null);
