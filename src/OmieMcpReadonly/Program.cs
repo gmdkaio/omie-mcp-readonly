@@ -14,7 +14,8 @@ log.ApagarAntigos(DateTime.Now);
 var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
 http.DefaultRequestHeaders.UserAgent.ParseAdd($"omie-mcp-readonly/{versao}");
 var clientes = empresas.Lista.ToDictionary(e => e.Nome, e => new OmieClient(e, http, log));
-var servico = new Servico(empresas, new Buscador(clientes), Servico.EsperaDoAmbiente());
+var catalogo = Catalogo.Embutido();
+var servico = new Servico(empresas, new Buscador(clientes, catalogo), Servico.EsperaDoAmbiente());
 
 var builder = Host.CreateApplicationBuilder(args);
 // stdout is the MCP channel: every log line goes to stderr, which Claude Desktop keeps in its MCP logs
@@ -23,7 +24,7 @@ builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
 builder.Services.AddSingleton(servico);
-builder.Services.AddSingleton(Catalogo.Embutido());
+builder.Services.AddSingleton(catalogo);
 builder.Services
     .AddMcpServer(o =>
     {

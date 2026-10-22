@@ -126,9 +126,34 @@ public class FerramentasTests
     [Fact]
     public void Paginacao_estilo_n_no_financeiro()
     {
-        Assert.Equal(("nPagina", "nRegPorPagina"), Buscador.EstiloPaginacao("financas/mf", []));
-        Assert.Equal(("pagina", "registros_por_pagina"), Buscador.EstiloPaginacao("geral/clientes", []));
-        Assert.Equal(("nPagina", "nRegPorPagina"), Buscador.EstiloPaginacao("outro/servico", new JsonObject { ["nPagina"] = 1 }));
+        Assert.Equal(("nPagina", "nRegPorPagina"), Buscador.EstiloPaginacao("financas/mf", "ListarMovimentos", []));
+        Assert.Equal(("pagina", "registros_por_pagina"), Buscador.EstiloPaginacao("geral/clientes", "ListarClientes", []));
+        Assert.Equal(("nPagina", "nRegPorPagina"), Buscador.EstiloPaginacao("outro/servico", "ListarX", new JsonObject { ["nPagina"] = 1 }));
+    }
+
+    [Fact]
+    public void Paginacao_vem_do_catalogo_quando_o_metodo_esta_nele()
+    {
+        var catalogo = Catalogo.Embutido();
+        Assert.Equal(("nPagina", "nRegPorPagina"), Buscador.EstiloPaginacao("estoque/consulta", "ListarPosEstoque", [], catalogo));
+        Assert.Equal(("nPagina", "nRegistrosPorPagina"), Buscador.EstiloPaginacao("geral/tiposentrega", "ListarTipoEntrega", [], catalogo));
+        Assert.Equal(("nPagina", "nRegsPorPagina"), Buscador.EstiloPaginacao("produtos/pedidocompra", "PesquisarPedCompra", [], catalogo));
+        Assert.Equal(((string?)null, (string?)null), Buscador.EstiloPaginacao("geral/paises", "ListarPaises", [], catalogo));
+    }
+
+    [Fact]
+    public async Task Metodo_que_nao_pagina_e_chamado_uma_vez_sem_campos_de_pagina()
+    {
+        using var amb = new Ambiente((_, _) => Ambiente.Ok(new JsonObject
+        {
+            ["lista_paises"] = new JsonArray(new JsonObject { ["cCodigo"] = "1058", ["cDescricao"] = "BRASIL" }, new JsonObject { ["cCodigo"] = "0132", ["cDescricao"] = "AFEGANISTAO" }),
+        }));
+        var servico = new Servico(amb.Empresas, new Buscador(amb.Clientes, Catalogo.Embutido()), TimeSpan.FromSeconds(30));
+        var r = JsonNode.Parse(await Ferramentas.Consultar(servico, "MATRIZ", "geral/paises", "ListarPaises", new JsonObject { ["filtrar_por_descricao"] = "" }))!;
+
+        Assert.Equal(2, r["total_de_registros"]!.GetValue<int>());
+        var param = Assert.Single(amb.Omie.Pedidos).Corpo["param"]![0]!.AsObject();
+        Assert.DoesNotContain(param, p => p.Key.Contains("agina", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

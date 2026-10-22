@@ -31,12 +31,12 @@ public sealed class Busca
 /// so; the next identical call picks up the same job. Finished jobs are kept as a cache for 15 minutes, which also
 /// keeps follow-up questions clear of Omie's 60 s "consumo redundante" rule.
 /// </summary>
-public sealed class Buscador(IReadOnlyDictionary<string, OmieClient> clientes, TimeProvider? relogio = null)
+public sealed partial class Buscador(IReadOnlyDictionary<string, OmieClient> clientes, Catalogo? catalogo = null, TimeProvider? relogio = null)
 {
     public const int TamanhoPagina = 100;
     public static readonly TimeSpan Validade = TimeSpan.FromMinutes(15);
 
-    // endpoints that page with nPagina/nRegPorPagina; the rest use pagina/registros_por_pagina
+    // without a catalog entry: endpoints that page with nPagina/nRegPorPagina; the rest use pagina/registros_por_pagina
     private static readonly HashSet<string> EstiloN =
         ["financas/mf", "financas/pesquisartitulos", "financas/contacorrentelancamentos", "financas/extrato"];
 
@@ -98,19 +98,20 @@ public sealed class Buscador(IReadOnlyDictionary<string, OmieClient> clientes, T
                 return linhas;
             }
 
-            var (chavePagina, chaveTamanho) = EstiloPaginacao(endpoint, parametros);
-            var tamanho = parametros[chaveTamanho]?.GetValue<int>() ?? TamanhoPagina;
-            for (var pagina = parametros[chavePagina]?.GetValue<int>() ?? 1; ; pagina++)
+            var (chavePagina, chaveTamanho) = EstiloPaginacao(endpoint, metodo, parametros, catalogo);
+            var tamanho = chaveTamanho is null ? (int?)null : Inteiro(parametros, chaveTamanho) ?? TamanhoPagina;
+            for (var pagina = (chavePagina is null ? null : Inteiro(parametros, chavePagina)) ?? 1; ; pagina++)
             {
                 var p = (JsonObject)parametros.DeepClone();
-                p[chavePagina] = pagina;
-                p[chaveTamanho] = tamanho;
+                // a list method without page fields answers everything in one call
+                if (chavePagina is not null) p[chavePagina] = pagina;
+                if (chaveTamanho is not null) p[chaveTamanho] = tamanho;
                 var resposta = await cliente.ChamarAsync(endpoint, metodo, p, busca.Avisar);
                 busca.PaginasLidas++;
                 if (resposta is null) break;
 
-                busca.TotalPaginas ??= Inteiro(resposta, "total_de_paginas", "nTotPaginas", "total_paginas");
-                busca.TotalRegistros ??= Inteiro(resposta, "total_de_registros", "nTotRegistros");
+                busca.TotalPaginas ??= Total(resposta, TotalPaginas());
+                busca.TotalRegistros ??= Total(resposta, TotalRegistros());
                 var lista = ListaPrincipal(resposta);
                 if (lista is null)
                 {
@@ -118,7 +119,7 @@ public sealed class Buscador(IReadOnlyDictionary<string, OmieClient> clientes, T
                     break;
                 }
                 linhas.AddRange(lista.OfType<JsonObject>());
-                if (lista.Count == 0 || pagina >= (busca.TotalPaginas ?? pagina) || linhas.Count >= limite)
+                if (chavePagina is null || lista.Count == 0 || pagina >= (busca.TotalPaginas ?? pagina) || linhas.Count >= limite)
                     break;
             }
             busca.TotalRegistros ??= linhas.Count;
@@ -132,15 +133,18 @@ public sealed class Buscador(IReadOnlyDictionary<string, OmieClient> clientes, T
     }
 
     /// <summary>
-    /// Which parameter names carry the page number and size. Names Claude already put in the parameters win (some
-    /// methods use neither convention); otherwise by endpoint.
+    /// Which parameter names carry the page number and size; null means the method doesn't page. The method's
+    /// documented request (from the catalog) wins over the endpoint list, and page fields already in the parameters
+    /// win over both.
     /// </summary>
-    public static (string Pagina, string Tamanho) EstiloPaginacao(string endpoint, JsonObject parametros)
+    public static (string? Pagina, string? Tamanho) EstiloPaginacao(string endpoint, string metodo, JsonObject parametros, Catalogo? catalogo = null)
     {
         if (parametros.ContainsKey("nPagina") || parametros.ContainsKey("nRegPorPagina"))
             return ("nPagina", "nRegPorPagina");
         if (parametros.ContainsKey("pagina") || parametros.ContainsKey("registros_por_pagina"))
             return ("pagina", "registros_por_pagina");
+        if (catalogo?.Paginacao(endpoint, metodo) is { } doCatalogo)
+            return doCatalogo;
         return EstiloN.Contains(endpoint) ? ("nPagina", "nRegPorPagina") : ("pagina", "registros_por_pagina");
     }
 
@@ -148,13 +152,19 @@ public sealed class Buscador(IReadOnlyDictionary<string, OmieClient> clientes, T
     public static JsonArray? ListaPrincipal(JsonObject resposta) =>
         resposta.Select(p => p.Value).OfType<JsonArray>().OrderByDescending(a => a.Count).FirstOrDefault();
 
-    private static int? Inteiro(JsonObject o, params string[] nomes)
-    {
-        foreach (var nome in nomes)
-            if (o[nome] is JsonValue v && (v.TryGetValue<int>(out var i) || (v.TryGetValue<string>(out var s) && int.TryParse(s, out i))))
-                return i;
-        return null;
-    }
+    // total_de_paginas, nTotPaginas, total_paginas...; total_de_registros, nTotRegistros...
+    [System.Text.RegularExpressions.GeneratedRegex("(?i)^n?tot.*pag")]
+    private static partial System.Text.RegularExpressions.Regex TotalPaginas();
+
+    [System.Text.RegularExpressions.GeneratedRegex("(?i)^n?tot.*reg")]
+    private static partial System.Text.RegularExpressions.Regex TotalRegistros();
+
+    private static int? Total(JsonObject resposta, System.Text.RegularExpressions.Regex nome) =>
+        resposta.Where(p => nome.IsMatch(p.Key)).Select(p => Inteiro(resposta, p.Key)).FirstOrDefault(i => i is not null);
+
+    private static int? Inteiro(JsonObject o, string nome) =>
+        o[nome] is JsonValue v && (v.TryGetValue<int>(out var i) || (v.TryGetValue<string>(out var s) && int.TryParse(s, out i)))
+            ? i : null;
 
     private void Limpar()
     {
