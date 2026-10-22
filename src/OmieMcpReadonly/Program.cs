@@ -33,6 +33,19 @@ builder.Services
     })
     .WithStdioServerTransport()
     .WithTools<Ferramentas>()
-    .WithTools<Receitas>();
+    .WithTools<Receitas>()
+    // a refused write, a missing company or an Omie fault goes back to Claude as the tool's error text, without the
+    // SDK's "An error occurred invoking" prefix and without a stack trace in Claude Desktop's log
+    .WithRequestFilters(f => f.AddCallToolFilter(proximo => async (pedido, ct) =>
+    {
+        try
+        {
+            return await proximo(pedido, ct);
+        }
+        catch (ModelContextProtocol.McpException e)
+        {
+            return new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = e.Message }] };
+        }
+    }));
 
 await builder.Build().RunAsync();

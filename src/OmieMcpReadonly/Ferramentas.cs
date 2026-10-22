@@ -166,8 +166,8 @@ public sealed class Ferramentas
     }
 
     /// <summary>
-    /// Errors the user should hear about (refused write, wrong company, Omie fault) go back as tool errors with the
-    /// message intact; McpException is what the SDK passes through as text.
+    /// Turns the errors the user should hear about (refused write, wrong company, Omie fault) into McpException;
+    /// the filter in Program.cs sends its message back to Claude as the tool's error text.
     /// </summary>
     public static async Task<string> Executar(Func<Task<JsonObject>> acao)
     {
