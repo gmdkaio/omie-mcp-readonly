@@ -27,7 +27,32 @@ public sealed class Receitas
 
     private const string DefinicaoNotas =
         "NF-e de saída (tpNF 1) emitidas no período (ide.dEmi), sem as canceladas (ide.dCan), inutilizadas, denegadas " +
-        "e devoluções (finNFe 4). Todas as naturezas de operação entram (CFOP não é filtrado).";
+        "e devoluções (finNFe 4), e sem as saídas que não são venda: CFOP 5.9xx, 6.9xx e 7.9xx (remessas, retornos de " +
+        "conserto, amostras grátis, moldes e outras saídas).";
+
+    // CFOP x.9xx is "outras saídas": remessas, conserto, amostras, moulds sent to a client, and the remessa that
+    // repeats an entrega-futura sale (6.924 after 6.122). On real data these were a sizeable part of the monthly
+    // invoices that the management DRE doesn't count as billing (22/10/2026)
+    private const string CampoVenda = "_venda";
+
+    public static bool CfopDeVenda(string? cfop)
+    {
+        var digitos = new string((cfop ?? "").Where(char.IsAsciiDigit).ToArray());
+        return digitos.Length < 2 || digitos[1] != '9';
+    }
+
+    /// <summary>Marks each invoice item, and the invoice, with _venda = S or N from the items' CFOP.</summary>
+    public static void MarcarVendas(IEnumerable<JsonObject> notas)
+    {
+        foreach (var nota in notas)
+        {
+            var itens = (nota["det"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+            foreach (var item in itens)
+                item[CampoVenda] = CfopDeVenda(Resumo.Valor(item, "prod.CFOP")?.ToString()) ? "S" : "N";
+            // an invoice with no items listed is kept, as before
+            nota[CampoVenda] = itens.Count == 0 || itens.Any(i => i[CampoVenda]!.GetValue<string>() == "S") ? "S" : "N";
+        }
+    }
 
     [McpServerTool(Name = "clientes_novos", Title = "Clientes novos por período", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("How many new clients in a period (cadastros included in Omie with the tag Cliente), month by month, plus every cadastro included in the period broken down by tag (Fornecedor, Transportadora, no tag...). Use for \"quantos clientes novos\"; the headline number is clientes_novos.")]
@@ -101,7 +126,9 @@ public sealed class Receitas
                 return Servico.Andamento(buscas);
 
             var linhas = Servico.Linhas(buscas);
-            var saida = Cabecalho("produtos_mais_vendidos", buscas, "produtos/nfconsultar", "ListarNF", param, NotasValidas, conferida: false,
+            MarcarVendas(linhas);
+            Filtro[] itensDeVenda = [.. NotasValidas, new("det." + CampoVenda, "=", "S")];
+            var saida = Cabecalho("produtos_mais_vendidos", buscas, "produtos/nfconsultar", "ListarNF", param, itensDeVenda, conferida: false,
                 DefinicaoNotas + " Uma linha por item de nota (det). Receita = soma de det.prod.vProd (valor bruto dos " +
                 "produtos, sem IPI, ST e frete, antes de descontos); quantidade = soma de det.prod.qCom na unidade " +
                 "comercial de cada produto (campo unidade; MI = milheiro, então 2,6 MI são 2.600 peças); preço médio = " +
@@ -109,7 +136,7 @@ public sealed class Receitas
                 "não são comparáveis entre si: diga a unidade junto de cada quantidade. A soma geral de quantidade " +
                 "mistura unidades e não deve ser citada.");
             var resumo = Resumo.Resumir(linhas, new PedidoResumo(
-                Expandir: "det", Filtros: NotasValidas, Somar: ["det.prod.vProd", "det.prod.qCom"],
+                Expandir: "det", Filtros: itensDeVenda, Somar: ["det.prod.vProd", "det.prod.qCom"],
                 AgruparPor: "det.prod.cProd", Rotulo: "det.prod.xProd", OrdenarPor: ordem, Top: Math.Clamp(top, 1, 500)));
             AdicionarPrecoMedioEUnidade(resumo, linhas);
             saida["resumo"] = resumo;
@@ -132,11 +159,14 @@ public sealed class Receitas
                 return Servico.Andamento(buscas);
 
             var linhas = Servico.Linhas(buscas);
-            var saida = Cabecalho("faturamento_por_cliente", buscas, "produtos/nfconsultar", "ListarNF", param, NotasValidas, conferida: false,
-                DefinicaoNotas + " Faturamento = soma do valor total da nota (total.ICMSTot.vNF, com impostos e frete). " +
-                "Clientes agrupados pelo CNPJ/CPF do destinatário, então o mesmo cliente nas duas empresas soma junto.");
+            MarcarVendas(linhas);
+            Filtro[] notasDeVenda = [.. NotasValidas, new(CampoVenda, "=", "S")];
+            var saida = Cabecalho("faturamento_por_cliente", buscas, "produtos/nfconsultar", "ListarNF", param, notasDeVenda, conferida: false,
+                DefinicaoNotas + " Faturamento = soma do valor total da nota (total.ICMSTot.vNF, com impostos e frete); " +
+                "uma nota entra se tiver pelo menos um item de venda. Clientes agrupados pelo CNPJ/CPF do destinatário, " +
+                "então o mesmo cliente nas duas empresas soma junto.");
             saida["resumo"] = Resumo.Resumir(linhas, new PedidoResumo(
-                Filtros: NotasValidas, Somar: ["total.ICMSTot.vNF"], AgruparPor: "nfDestInt.cnpj_cpf",
+                Filtros: notasDeVenda, Somar: ["total.ICMSTot.vNF"], AgruparPor: "nfDestInt.cnpj_cpf",
                 Rotulo: "nfDestInt.cRazao", Top: Math.Clamp(top, 1, 500)));
             return Finalizar(saida, buscas);
         });
@@ -159,10 +189,19 @@ public sealed class Receitas
                 ["dDtVencDe"] = "01/01/2000",
                 ["dDtVencAte"] = hoje,
             };
-            Filtro[] filtros = [new("detalhes.cStatus", "=", "ATRASADO")];
+            // a title received in part comes back with status RECEBIDO but cLiquidado N and the rest still open, and
+            // Omie's own "Contas a Receber em Atraso" screen counts it; so the status text is not the test, the open
+            // balance is (checked against that screen on 22/10/2026)
+            Filtro[] filtros =
+            [
+                new("resumo.cLiquidado", "!=", "S"),
+                new("resumo.nValAberto", ">", 0),
+                new("detalhes.dDtVenc", "<", hoje),
+            ];
             return await PorClienteAsync(servico, empresa, "contas_receber_vencidas", param, filtros, top, ordenarPorData: false,
-                $"Títulos de contas a receber com status ATRASADO no Omie hoje ({hoje}), vencidos desde 2000. Valor = " +
-                "resumo.nValAberto (o que falta receber, já descontado o que foi pago em parte). Agrupado por cliente.", ct);
+                $"Títulos de contas a receber vencidos antes de hoje ({hoje}), não liquidados e com valor em aberto, inclusive " +
+                "os recebidos em parte. Valor = resumo.nValAberto (o que falta receber, já descontado o que foi pago). " +
+                "Agrupado por cliente. A tela de atrasados do Omie pode deixar de fora um título vencido ontem.", ct);
         });
 
     [McpServerTool(Name = "contas_pagar_proximos_dias", Title = "Contas a pagar nos próximos dias", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
