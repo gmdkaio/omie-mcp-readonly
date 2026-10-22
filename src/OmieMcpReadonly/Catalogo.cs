@@ -142,49 +142,72 @@ public sealed partial class Catalogo
                     : $"{nome} não existe em {ep}. Métodos de leitura deste serviço: {Nomes(servico)}.");
         }
 
-        return new JsonObject
+        // a service with many methods doesn't fit whole: first drop the record fields (Claude asks again for one
+        // method), then shorten the field list of that one method until it fits
+        JsonObject saida;
+        var maximoCampos = MaximoCampos;
+        var comCampos = true;
+        while (true)
+        {
+            saida = Montar(servico, metodos, comCampos, maximoCampos);
+            if (Servico.Texto(saida).Length <= Servico.MaximoCaracteres || maximoCampos < 20) break;
+            if (comCampos && metodos.Count > 1) comCampos = false;
+            else maximoCampos /= 2;
+        }
+        return saida;
+    }
+
+    private JsonObject Montar(ServicoOmie servico, List<MetodoOmie> metodos, bool comCampos, int maximoCampos)
+    {
+        var saida = new JsonObject
         {
             ["endpoint"] = servico.Endpoint,
             ["servico"] = $"{servico.Grupo}: {servico.Titulo}",
             ["descricao"] = servico.Descricao,
             ["documentacao"] = $"https://app.omie.com.br/api/v1/{servico.Endpoint}/",
-            ["metodos"] = new JsonArray(metodos.Select(m => (JsonNode)Metodo(servico, m)).ToArray()),
+            ["metodos"] = new JsonArray(metodos.Select(m => (JsonNode)Metodo(servico, m, comCampos, maximoCampos)).ToArray()),
             ["recusados_por_nao_serem_leitura"] = string.Join(", ", servico.Recusados),
             ["como_usar"] = "Mande em parametros só os filtros (nomes exatos da lista parametros; datas dd/mm/aaaa). " +
                             "Não mande campos de página: consultar e resumir paginam sozinhos. Em resumir, use os caminhos de " +
                             "campos_do_registro; um caminho com [] é uma lista: use expandir com a parte antes do [] (ex.: det) " +
                             "e escreva o caminho sem os [] (det.prod.vProd).",
         };
+        if (!comCampos)
+            saida["nota"] = "Serviço grande: os campos dos registros não couberam. Chame catalogo de novo com endpoint e metodo para ver os de um método.";
+        return saida;
     }
 
-    private JsonObject Metodo(ServicoOmie s, MetodoOmie m)
+    private JsonObject Metodo(ServicoOmie s, MetodoOmie m, bool comCampos, int maximoCampos)
     {
         var saida = new JsonObject
         {
             ["metodo"] = m.Nome,
             ["descricao"] = m.Descricao,
             ["exemplo_do_omie"] = m.Exemplo,
-            ["parametros"] = Linhas(Achatar(s, m.Requisicao, ignorar: ["pagina", "registros_por_pagina", "nPagina", "nRegPorPagina"])),
+            ["parametros"] = Linhas(Achatar(s, m.Requisicao, maximoCampos, ignorar: PaginaOuTamanho)),
         };
-        // a list response has paging fields plus one array of records; describe the record, not the envelope
+        if (!comCampos) return saida;
+        // a list response has paging fields plus one array of records; the fields shown are the record's
         if (s.Tipos.GetValueOrDefault(m.Resposta) is { } resposta
             && resposta.Campos.FirstOrDefault(c => c.Ref is { } r && s.Tipos.GetValueOrDefault(r)?.Elemento is not null) is { } lista)
         {
             saida["lista_de_registros"] = lista.Nome;
             saida["total_vem_em"] = string.Join(", ", resposta.Campos.Where(c => c.Nome.StartsWith("total") || c.Nome.StartsWith("nTot")).Select(c => c.Nome));
-            saida["campos_do_registro"] = Linhas(Achatar(s, s.Tipos[lista.Ref!].Elemento!));
+            saida["campos_do_registro"] = Linhas(Achatar(s, s.Tipos[lista.Ref!].Elemento!, maximoCampos));
         }
         else
         {
-            saida["campos_do_registro"] = Linhas(Achatar(s, m.Resposta));
+            saida["campos_do_registro"] = Linhas(Achatar(s, m.Resposta, maximoCampos));
         }
         return saida;
     }
 
+    private static readonly Func<string, bool> PaginaOuTamanho = n => PaginaRegex().IsMatch(n) || TamanhoRegex().IsMatch(n);
+
     private static JsonArray Linhas(List<string> linhas) => new(linhas.Select(l => (JsonNode)l).ToArray());
 
     /// <summary>A type's leaf fields as "caminho (tipo): descrição", following nested types and lists.</summary>
-    private static List<string> Achatar(ServicoOmie s, string tipo, IReadOnlyCollection<string>? ignorar = null)
+    private static List<string> Achatar(ServicoOmie s, string tipo, int maximoCampos, Func<string, bool>? ignorar = null)
     {
         var linhas = new List<string>();
         void Visitar(string nomeTipo, string prefixo, int profundidade, HashSet<string> caminho)
@@ -192,8 +215,8 @@ public sealed partial class Catalogo
             if (!s.Tipos.TryGetValue(nomeTipo, out var t) || !caminho.Add(nomeTipo)) return;
             foreach (var c in t.Campos.Where(c => c.Nome.Length > 0))
             {
-                if (linhas.Count >= MaximoCampos) return;
-                if (prefixo.Length == 0 && ignorar?.Contains(c.Nome) == true) continue;
+                if (linhas.Count >= maximoCampos) return;
+                if (prefixo.Length == 0 && ignorar?.Invoke(c.Nome) == true) continue;
                 var destino = c.Ref is null ? null : s.Tipos.GetValueOrDefault(c.Ref);
                 var elemento = destino?.Elemento;
                 var filho = elemento ?? c.Ref;
@@ -205,8 +228,8 @@ public sealed partial class Catalogo
             caminho.Remove(nomeTipo);
         }
         Visitar(tipo, "", 0, []);
-        if (linhas.Count >= MaximoCampos)
-            linhas.Add($"(lista cortada em {MaximoCampos} campos)");
+        if (linhas.Count >= maximoCampos)
+            linhas.Add($"(lista cortada em {maximoCampos} campos; os mais internos ficaram de fora)");
         return linhas;
     }
 

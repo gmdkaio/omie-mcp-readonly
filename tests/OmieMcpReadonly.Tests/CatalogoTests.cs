@@ -62,6 +62,17 @@ public class CatalogoTests
     }
 
     [Fact]
+    public void Nenhum_detalhe_passa_do_tamanho_maximo()
+    {
+        var tamanhos = Catalogo.Dados.Servicos
+            .SelectMany(s => s.Metodos.Select(m => (string?)m.Nome).Append(null).Select(m => (Endpoint: $"{s.Endpoint} {m}", Tamanho: Servico.Texto(Catalogo.Detalhar(s.Endpoint, m)).Length)))
+            .ToList();
+        var maior = tamanhos.MaxBy(t => t.Tamanho);
+        Assert.True(maior.Tamanho <= Servico.MaximoCaracteres, $"{maior.Endpoint}: {maior.Tamanho} caracteres");
+        Assert.True(Servico.Texto(Catalogo.Indice()).Length <= Servico.MaximoCaracteres);
+    }
+
+    [Fact]
     public void Metodo_de_escrita_no_detalhe_e_recusado_com_explicacao()
     {
         var e = Assert.Throws<ArgumentException>(() => Catalogo.Detalhar("geral/clientes", "IncluirCliente"));
