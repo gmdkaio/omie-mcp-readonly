@@ -33,7 +33,7 @@ public class ReceitasTests
             Nf("22", "Beta", "4", "", 999m, ("P1", 99, 999m)),
             Nf("11", "Alfa", "1", "12/03/2026", 777m, ("P2", 77, 777m)))),
         "ListarClientes" => Ambiente.Ok(Pagina("clientes_cadastro", "c",
-            new JsonObject { ["codigo_cliente_omie"] = 1, ["cnpj_cpf"] = "11", ["razao_social"] = "Alfa Ltda", ["nome_fantasia"] = "Alfa", ["info"] = new JsonObject { ["dInc"] = "03/01/2026" }, ["tags"] = new JsonArray(new JsonObject { ["tag"] = "Cliente" }) },
+            new JsonObject { ["codigo_cliente_omie"] = 1, ["cnpj_cpf"] = "11", ["razao_social"] = "Alfa Ltda", ["nome_fantasia"] = "Alfa", ["info"] = new JsonObject { ["dInc"] = "03/01/2026" }, ["tags"] = new JsonArray(new JsonObject { ["tag"] = "Cliente" }, new JsonObject { ["tag"] = "Fornecedor" }) },
             new JsonObject { ["codigo_cliente_omie"] = 2, ["cnpj_cpf"] = "22", ["razao_social"] = "Beta SA", ["nome_fantasia"] = "", ["info"] = new JsonObject { ["dInc"] = "20/02/2026" }, ["tags"] = new JsonArray(new JsonObject { ["tag"] = "Fornecedor" }) },
             new JsonObject { ["codigo_cliente_omie"] = 3, ["cnpj_cpf"] = "00.000.000/0000-00", ["razao_social"] = "SIMPLES NACIONAL", ["info"] = new JsonObject { ["dInc"] = "10/01/2026" }, ["tags"] = new JsonArray() },
             new JsonObject { ["codigo_cliente_omie"] = 4, ["cnpj_cpf"] = "00.000.000/0000-00", ["razao_social"] = "FOLHA", ["info"] = new JsonObject { ["dInc"] = "10/05/2025" } })),
@@ -127,9 +127,13 @@ public class ReceitasTests
     {
         using var amb = new Ambiente(Omie);
         var r = JsonNode.Parse(await Receitas.ClientesNovos(amb.Servico, "MATRIZ", "01/01/2026", "31/01/2026"))!;
-        Assert.Equal(2, r["por_mes"]!["linhas_consideradas"]!.GetValue<int>());
-        Assert.Equal("Cliente", r["por_tag"]!["grupos"]![0]!["grupo"]!.GetValue<string>());
-        Assert.Equal(1, r["sem_tag"]!.GetValue<int>());
+        // January: one cadastro tagged Cliente, one with no tag; only the first is a new client
+        Assert.Equal(1, r["clientes_novos"]!.GetValue<int>());
+        Assert.Equal("2026-01", r["por_mes"]!["grupos"]![0]!["grupo"]!.GetValue<string>());
+        var todos = r["todos_os_cadastros"]!;
+        Assert.Equal(2, todos["cadastros_incluidos"]!.GetValue<int>());
+        Assert.Equal("Cliente", todos["por_tag"]!["grupos"]![0]!["grupo"]!.GetValue<string>());
+        Assert.Equal(1, todos["sem_tag"]!.GetValue<int>());
         Assert.Equal("S", amb.Omie.Pedidos[0].Corpo["param"]![0]!["filtrar_apenas_inclusao"]!.GetValue<string>());
     }
 }

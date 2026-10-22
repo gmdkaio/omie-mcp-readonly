@@ -30,7 +30,7 @@ public sealed class Receitas
         "e devoluções (finNFe 4). Todas as naturezas de operação entram (CFOP não é filtrado).";
 
     [McpServerTool(Name = "clientes_novos", Title = "Clientes novos por período", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("How many new clients (cadastros included in Omie) in a period, month by month, with the count by tag (Cliente, Fornecedor...). Use for \"quantos clientes novos\".")]
+    [Description("How many new clients in a period (cadastros included in Omie with the tag Cliente), month by month, plus every cadastro included in the period broken down by tag (Fornecedor, Transportadora, no tag...). Use for \"quantos clientes novos\"; the headline number is clientes_novos.")]
     public static Task<string> ClientesNovos(
         Servico servico,
         [Description(Ferramentas.DescricaoEmpresa)] string empresa,
@@ -53,17 +53,28 @@ public sealed class Receitas
 
             // the date filter is applied again here: Omie's filter is the first line, this one is the definition
             Filtro[] noPeriodo = [new("info.dInc", ">=", de), new("info.dInc", "<=", ate)];
+            // the client register also holds suppliers, carriers, staff and cadastros with no tag: a new client is
+            // one with the tag Cliente. Unnesting tags gives one row per tag, and a cadastro has Cliente at most once
+            Filtro[] clientes = [.. noPeriodo, new("tags.tag", "=", "Cliente")];
             var linhas = Servico.Linhas(buscas);
-            var saida = Cabecalho("clientes_novos", buscas, "geral/clientes", "ListarClientes", param, noPeriodo, conferida: false,
-                $"Cliente novo = cadastro incluído no Omie (data de inclusão, info.dInc) entre {de} e {ate}. O cadastro " +
-                "de clientes do Omie também guarda fornecedores e transportadoras: a contagem por tag mostra quantos estão " +
-                "marcados como Cliente. Cadastros inativos entram na contagem.");
-            saida["por_mes"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: noPeriodo, AgruparPor: "info.dInc", Periodo: "mes", OrdenarPor: "grupo", Top: 1000));
-            saida["por_tag"] = Resumo.Resumir(linhas, new PedidoResumo(Expandir: "tags", Filtros: noPeriodo, AgruparPor: "tags.tag", OrdenarPor: "contagem"));
-            // a cadastro can have several tags or none; the ones with none don't show up in por_tag at all
-            saida["sem_tag"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: [.. noPeriodo, new("tags", "vazio")]))["linhas_consideradas"]!.DeepClone();
+            var saida = Cabecalho("clientes_novos", buscas, "geral/clientes", "ListarClientes", param, clientes, conferida: false,
+                $"Cliente novo = cadastro incluído no Omie (data de inclusão, info.dInc) entre {de} e {ate} e marcado " +
+                "com a tag Cliente. O cadastro do Omie também guarda fornecedores, transportadoras, prestadores e " +
+                "cadastros sem tag: esses não contam como cliente novo e aparecem só no detalhamento por tag. Cadastros " +
+                "inativos contam. Um cadastro com as tags Cliente e Fornecedor conta como cliente.");
+            var porMes = Resumo.Resumir(linhas, new PedidoResumo(Expandir: "tags", Filtros: clientes, AgruparPor: "info.dInc", Periodo: "mes", OrdenarPor: "grupo", Top: 1000));
+            saida["clientes_novos"] = porMes["linhas_consideradas"]!.DeepClone();
+            saida["por_mes"] = porMes;
             if (buscas.Count > 1)
-                saida["por_empresa"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: noPeriodo, AgruparPor: "_empresa", OrdenarPor: "grupo"));
+                saida["por_empresa"] = Resumo.Resumir(linhas, new PedidoResumo(Expandir: "tags", Filtros: clientes, AgruparPor: "_empresa", OrdenarPor: "grupo"));
+            var detalhe = new JsonObject
+            {
+                ["cadastros_incluidos"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: noPeriodo))["linhas_consideradas"]!.DeepClone(),
+                ["por_tag"] = Resumo.Resumir(linhas, new PedidoResumo(Expandir: "tags", Filtros: noPeriodo, AgruparPor: "tags.tag", OrdenarPor: "contagem")),
+                // a cadastro can have several tags or none; the ones with none don't show up in por_tag at all
+                ["sem_tag"] = Resumo.Resumir(linhas, new PedidoResumo(Filtros: [.. noPeriodo, new("tags", "vazio")]))["linhas_consideradas"]!.DeepClone(),
+            };
+            saida["todos_os_cadastros"] = detalhe;
             return Finalizar(saida, buscas);
         });
 

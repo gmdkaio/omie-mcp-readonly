@@ -4,7 +4,7 @@ Each recipe is a fixed query with its definition decided once. It ships with `co
 
 | Recipe | Omie call | Definition | Screen to compare | Real data | Screen |
 |---|---|---|---|---|---|
-| `clientes_novos` | `geral/clientes` `ListarClientes`, `filtrar_por_data_de/ate`, `filtrar_apenas_inclusao` `S` | cadastro with `info.dInc` in the period (also filtered here), by month, by tag, and how many have no tag | Clientes e Fornecedores, filtered by inclusion date | 22/10/2026 | no |
+| `clientes_novos` | `geral/clientes` `ListarClientes`, `filtrar_por_data_de/ate`, `filtrar_apenas_inclusao` `S` | cadastro with `info.dInc` in the period (also filtered here) and the tag Cliente, by month; every cadastro included in the period, by tag and without tag, as detail | Clientes e Fornecedores, filtered by inclusion date | 22/10/2026 | no |
 | `produtos_mais_vendidos` | `produtos/nfconsultar` `ListarNF`, `dEmiInicial/dEmiFinal`, `tpNF` `1` | one row per item (`det`), receita = `det.prod.vProd`, quantidade = `det.prod.qCom` in the product's unit (`det.prod.uCom`) | NF-e emitidas / Vendas por produto, same period | 22/10/2026 | no |
 | `faturamento_por_cliente` | same invoices | `total.ICMSTot.vNF` per `nfDestInt.cnpj_cpf` | Faturamento por cliente, same period | 22/10/2026 | no |
 | `contas_receber_vencidas` | `financas/mf` `ListarMovimentos`, `cTpLancamento` `CR`, `cStatus` `ATRASADO`, `dDtVencDe` 01/01/2000 to today | `resumo.nValAberto` per client (names from `ListarClientes`) | Contas a Receber, filter Atrasados | 22/10/2026 | no |
@@ -23,11 +23,10 @@ Every recipe ran for two companies at once; the longest took 35 s (the client re
 - A cancelled invoice comes with `ide.dCan` filled and `ide.cDeneg` `N`. The `dCan` filter is the one that matters.
 - `qCom` is in each product's commercial unit, often `MI` (milheiro). A quantity ranking compares products in different units, so every product now carries its unit and the overall quantity sum is not to be quoted.
 - Government payees (DAS, payroll, taxes) share the CNPJ `00.000.000/0000-00`. A CNPJ made only of zeros no longer serves as the grouping key, so they don't merge under one name.
-- Many cadastros have no tag at all, so `por_tag` alone undercounts. The recipe now reports `sem_tag`.
+- Many cadastros have no tag at all, and the register also holds suppliers, carriers and staff. Decided on 22/10/2026: a new client is a cadastro included in the period with the tag Cliente (with or without other tags). The rest is reported under `todos_os_cadastros`.
 
 ## To settle at the screen check
 
-- "Cliente novo": every cadastro included in the period, only those tagged Cliente, or those tagged Cliente plus the untagged ones.
 - Whether free samples (CFOP x.911) and other non-sale CFOPs should be left out of billing. In the month checked they were well under 1% of the value.
 - Whether `EMABERTO` on contas a pagar includes titles already overdue (the recipe leaves out anything with previsão before today either way).
 
