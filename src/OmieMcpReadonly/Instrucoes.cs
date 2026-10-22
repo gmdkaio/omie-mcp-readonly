@@ -14,6 +14,7 @@ public static class Instrucoes
 
         How to answer:
         - If the question doesn't say which company and more than one is configured, ask first (one of them, or both).
+          The extension's name may mention a single company; that doesn't say which one the user means, so ask anyway.
           "ambas" combines all companies in one answer and also gives the split per company.
         - Prefer a recipe tool when one fits (clientes_novos, produtos_mais_vendidos, faturamento_por_cliente,
           contas_receber_vencidas, contas_pagar_proximos_dias). Otherwise find the service with catalogo: first a
